@@ -66,11 +66,17 @@ body {
   box-sizing: border-box;
 }
 
-body.kiosk-mode #root {
+body.kiosk-mode #root,
+body.public-board #root {
   width: 100%;
   max-width: none;
   border: none;
   text-align: left;
+}
+
+body.public-board,
+body.public-board #root {
+  background: #121212;
 }
 
 h1,

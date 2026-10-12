@@ -1,40 +1,103 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import {
+  TORNEO_ID,
+  leerResultado,
+  prepararResultado,
+  resultadoDocRef,
+  resultadoVacio,
+  validarResultado,
+} from '../utils/resultado';
+import { BOULDERS, COMPETIDORES, buscarPorDorsal, turnosDe } from '../data/ordenAbsolutaDamas';
+
+const COMPETIDORES_POR_ID = Object.fromEntries(COMPETIDORES.map((competidor) => [competidor.id, competidor]));
+
+function leerPreferencia(clave, valorInicial) {
+  try {
+    return localStorage.getItem(clave) || valorInicial;
+  } catch {
+    return valorInicial;
+  }
+}
+
+const botonBase = {
+  border: 'none',
+  borderRadius: '12px',
+  fontWeight: 'bold',
+  touchAction: 'manipulation',
+};
 
 export default function JuezView() {
-  // Estados para el inicio de sesión
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
   const [errorLogin, setErrorLogin] = useState('');
 
-  // Estados para el competidor actual (Datos simulados por ahora)
-  const [competidorActual] = useState({ id: "comp_123", nombre: "Martina Gómez", dorsal: "42", categoria: "Sub-15 Damas" });
-  
-  // Estados del puntaje en vivo
-  const [intentos, setIntentos] = useState(0);
-  const [zonaAlcanzada, setZonaAlcanzada] = useState(false);
-  const [topAlcanzado, setTopAlcanzado] = useState(false);
-  const [intentoZona, setIntentoZona] = useState(null);
-  const [intentoTop, setIntentoTop] = useState(null);
+  const [boulderId, setBoulderId] = useState(() => leerPreferencia('juez.boulder', 'M1'));
+  const [turnoIndex, setTurnoIndex] = useState(() => Number(leerPreferencia(`juez.turno.${leerPreferencia('juez.boulder', 'M1')}`, '0')) || 0);
+  const [competidorId, setCompetidorId] = useState(null);
+  const [buscando, setBuscando] = useState(false);
+  const [dorsalBusqueda, setDorsalBusqueda] = useState('');
+  const [score, setScore] = useState(resultadoVacio());
+  const [listo, setListo] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [borrador, setBorrador] = useState(resultadoVacio());
+  const [errorEdicion, setErrorEdicion] = useState('');
+  const [guardando, setGuardando] = useState(false);
 
-  // Escuchar si hay un usuario logueado
+  const scoreRef = useRef(resultadoVacio());
+  const escriturasPendientes = useRef(0);
+  const colaEscritura = useRef(Promise.resolve());
+  const docActivo = useRef('');
+  const escribiendoDoc = useRef('');
+  const turnos = turnosDe(boulderId);
+  const turnoSeguro = Math.min(turnoIndex, turnos.length - 1);
+  const programada = turnos[turnoSeguro].competidor;
+  const competidor = (competidorId && turnos.find((turno) => turno.competidor.id === competidorId)?.competidor)
+    || COMPETIDORES_POR_ID[competidorId]
+    || programada;
+  const contextoRef = useRef({ competidor, boulderId });
+  contextoRef.current = { competidor, boulderId };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (usuarioActual) => {
       setUser(usuarioActual);
+      if (!usuarioActual) setListo(false);
     });
     return () => unsubscribe();
   }, []);
 
-  // La plantilla de Vite limita el ancho de #root. En el kiosco la pantalla tiene que ocupar la tablet entera.
   useEffect(() => {
     document.body.classList.add('kiosk-mode');
     return () => document.body.classList.remove('kiosk-mode');
   }, []);
 
-  // Función para iniciar sesión
+  useEffect(() => {
+    if (!user || !competidor) return undefined;
+    const docId = `${competidor.id}_${boulderId}`;
+    docActivo.current = docId;
+    const vacio = resultadoVacio();
+    scoreRef.current = vacio;
+    setScore(vacio);
+    setListo(false);
+    setEditando(false);
+    const unsubscribe = onSnapshot(resultadoDocRef(db, competidor.id, boulderId), (snap) => {
+      if (docActivo.current !== docId) return;
+      if (escriturasPendientes.current > 0 && escribiendoDoc.current === docId) return;
+      const next = leerResultado(snap.data());
+      scoreRef.current = next;
+      setScore(next);
+      setListo(true);
+    }, (error) => {
+      console.error('Error al leer el resultado:', error);
+      setListo(true);
+      alert('No se pudo leer el resultado. Revisa tu conexión.');
+    });
+    return () => unsubscribe();
+  }, [user, competidor.id, boulderId]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -45,73 +108,149 @@ export default function JuezView() {
     }
   };
 
-  // Función principal: Guardar en la base de datos
-  const registrarAccion = async (tipoAccion) => {
-    // 1. Calculamos los nuevos valores según el botón que presionó
-    let nuevosIntentos = intentos;
-    let nuevaZona = zonaAlcanzada;
-    let nuevoTop = topAlcanzado;
-    let nuevoIntentoZona = intentoZona;
-    let nuevoIntentoTop = intentoTop;
+  const persistir = async (next, competidorActual, boulderActual) => {
+    await setDoc(resultadoDocRef(db, competidorActual.id, boulderActual), {
+      torneoId: TORNEO_ID,
+      competidorId: competidorActual.id,
+      nombre: competidorActual.nombre,
+      dorsal: competidorActual.dorsal,
+      categoria: competidorActual.categoria,
+      categoriaId: competidorActual.categoriaId,
+      boulderId: boulderActual,
+      intentos: next.intentos,
+      zonaEnIntento: next.zonaEnIntento,
+      topEnIntento: next.topEnIntento,
+      actualizadoPor: user.email,
+      actualizadoEn: serverTimestamp(),
+    });
+  };
 
-    if (tipoAccion === 'INTENTO') nuevosIntentos += 1;
-    if (tipoAccion === 'ZONA') {
-        if (!zonaAlcanzada) {
-          nuevosIntentos += 1; // La zona consume un intento si es la primera vez
-          nuevoIntentoZona = nuevosIntentos;
-        }
-        nuevaZona = true;
-    }
-    if (tipoAccion === 'TOP') {
-        if (!topAlcanzado) {
-          nuevosIntentos += 1; // El top consume un intento si es la primera vez
-          nuevoIntentoTop = nuevosIntentos;
-          if (!zonaAlcanzada) nuevoIntentoZona = nuevosIntentos; // El top implica zona en el mismo intento
-        }
-        nuevaZona = true; // Si hace top, implícitamente hizo zona
-        nuevoTop = true;
-    }
-
-    // 2. Actualizamos la pantalla del juez al instante
-    setIntentos(nuevosIntentos);
-    setZonaAlcanzada(nuevaZona);
-    setTopAlcanzado(nuevoTop);
-    setIntentoZona(nuevoIntentoZona);
-    setIntentoTop(nuevoIntentoTop);
-
-    // 3. Enviamos el registro a Firebase
-    try {
-      await addDoc(collection(db, 'intentos'), {
-        torneo_id: 'torneo_actual',
-        boulder_id: 'W1', // Esto luego vendrá del perfil del juez
-        competidor_id: competidorActual.id,
-        nombre_competidor: competidorActual.nombre,
-        juez_email: user.email,
-        accion: tipoAccion,
-        intentos_acumulados: nuevosIntentos,
-        zona: nuevaZona,
-        top: nuevoTop,
-        intento_zona: nuevoIntentoZona,
-        intento_top: nuevoIntentoTop,
-        timestamp: serverTimestamp()
+  const encolarEscritura = (next, competidorActual, boulderActual) => {
+    const docId = `${competidorActual.id}_${boulderActual}`;
+    escribiendoDoc.current = docId;
+    escriturasPendientes.current += 1;
+    colaEscritura.current = colaEscritura.current
+      .then(() => persistir(next, competidorActual, boulderActual))
+      .catch((error) => {
+        console.error('Error al guardar:', error);
+        alert('Error al guardar. Revisa tu conexión.');
+      })
+      .finally(() => {
+        escriturasPendientes.current -= 1;
       });
-      console.log("Acción guardada con éxito:", tipoAccion);
-    } catch (error) {
-      console.error("Error al guardar:", error);
-      alert("Error al guardar. Revisa tu conexión.");
+  };
+
+  const aplicar = (mutator) => {
+    const { competidor: competidorActual, boulderId: boulderActual } = contextoRef.current;
+    const next = mutator({ ...scoreRef.current });
+    scoreRef.current = next;
+    setScore(next);
+    encolarEscritura(next, competidorActual, boulderActual);
+  };
+
+  const sumarIntento = () => {
+    if (scoreRef.current.topEnIntento != null) return;
+    aplicar((actual) => ({ ...actual, intentos: actual.intentos + 1 }));
+  };
+
+  const marcarZona = () => {
+    const actual = scoreRef.current;
+    if (actual.zonaEnIntento != null || actual.topEnIntento != null || actual.intentos < 1) return;
+    aplicar((prev) => ({ ...prev, zonaEnIntento: prev.intentos }));
+  };
+
+  const marcarTop = () => {
+    const actual = scoreRef.current;
+    if (actual.topEnIntento != null || actual.intentos < 1) return;
+    aplicar((prev) => ({
+      ...prev,
+      topEnIntento: prev.intentos,
+      zonaEnIntento: prev.zonaEnIntento ?? prev.intentos,
+    }));
+  };
+
+  const abrirEdicion = () => {
+    setBorrador({ ...scoreRef.current });
+    setErrorEdicion('');
+    setEditando(true);
+  };
+
+  const cambiarBorrador = (campo, delta) => {
+    setBorrador((prev) => {
+      const next = { ...prev };
+      if (campo === 'intentos') {
+        next.intentos = Math.max(0, prev.intentos + delta);
+        return next;
+      }
+      if (delta > 0) {
+        const valor = prev[campo] ?? 0;
+        if (valor >= prev.intentos) return prev;
+        next[campo] = valor + 1;
+        return next;
+      }
+      if (prev[campo] == null || prev[campo] <= 1) {
+        next[campo] = null;
+        return next;
+      }
+      next[campo] = prev[campo] - 1;
+      return next;
+    });
+    setErrorEdicion('');
+  };
+
+  const guardarEdicion = async () => {
+    const preparado = prepararResultado(borrador);
+    const error = validarResultado(preparado);
+    if (error) {
+      setErrorEdicion(error);
+      return;
     }
+    const { competidor: competidorActual, boulderId: boulderActual } = contextoRef.current;
+    setGuardando(true);
+    scoreRef.current = preparado;
+    setScore(preparado);
+    setBorrador(preparado);
+    escribiendoDoc.current = `${competidorActual.id}_${boulderActual}`;
+    escriturasPendientes.current += 1;
+    colaEscritura.current = colaEscritura.current
+      .then(() => persistir(preparado, competidorActual, boulderActual))
+      .then(() => setEditando(false))
+      .catch((error) => {
+        console.error('Error al guardar la corrección:', error);
+        setErrorEdicion('No se pudo guardar. Revisa tu conexión.');
+      })
+      .finally(() => {
+        escriturasPendientes.current -= 1;
+        setGuardando(false);
+      });
   };
 
-  const resetearTurno = () => {
-    // Esto se usa cuando el competidor termina y viene el siguiente
-    setIntentos(0);
-    setZonaAlcanzada(false);
-    setTopAlcanzado(false);
-    setIntentoZona(null);
-    setIntentoTop(null);
+  const elegirBoulder = (id) => {
+    const indiceGuardado = Number(leerPreferencia(`juez.turno.${id}`, '0'));
+    const indice = Number.isInteger(indiceGuardado) ? indiceGuardado : 0;
+    localStorage.setItem('juez.boulder', id);
+    setBoulderId(id);
+    setTurnoIndex(indice);
+    setCompetidorId(null);
+    setBuscando(false);
+    setDorsalBusqueda('');
   };
 
-  // --- PANTALLA DE LOGIN ---
+  const fijarTurno = (indice) => {
+    const acotado = Math.max(0, Math.min(indice, turnos.length - 1));
+    localStorage.setItem(`juez.turno.${boulderId}`, String(acotado));
+    setTurnoIndex(acotado);
+    setCompetidorId(turnos[acotado].competidor.id);
+    setBuscando(false);
+    setDorsalBusqueda('');
+  };
+
+  const elegirCompetidor = (id) => {
+    setCompetidorId(id);
+    setBuscando(false);
+    setDorsalBusqueda('');
+  };
+
   if (!user) {
     return (
       <div style={{ padding: '2rem', fontFamily: 'sans-serif', textAlign: 'center', color: '#111', backgroundColor: '#fff', minHeight: '100svh', boxSizing: 'border-box' }}>
@@ -126,65 +265,174 @@ export default function JuezView() {
     );
   }
 
-  // --- PANTALLA DEL KIOSCO (EL JUEZ TRABAJANDO) ---
+  const hayTop = score.topEnIntento != null;
+  const hayZona = score.zonaEnIntento != null;
+  const puedeMarcar = score.intentos >= 1 && !hayTop;
+
   return (
-    <div style={{ padding: '1rem', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', height: '95vh', color: '#111', backgroundColor: '#fff', boxSizing: 'border-box' }}>
-      
-      {/* Cabecera (Info del Juez y Competidor) */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0f0f0', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+    <div style={{ padding: '1rem', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', minHeight: '100svh', color: '#111', backgroundColor: '#fff', boxSizing: 'border-box' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        {BOULDERS.map((id) => (
+          <button
+            key={id}
+            onClick={() => elegirBoulder(id)}
+            style={{ flex: 1, padding: '0.8rem', fontSize: '1.2rem', fontWeight: 'bold', borderRadius: '8px', border: 'none', backgroundColor: id === boulderId ? '#111' : '#e0e0e0', color: id === boulderId ? '#fff' : '#111' }}>
+            {id}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0f0f0', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem' }}>
         <div>
-          <h4 style={{ margin: 0, color: '#666' }}>Bloque W1 - {user.email}</h4>
-          <h2 style={{ margin: '5px 0 0 0', fontSize: '2rem', color: '#111' }}>#{competidorActual.dorsal} {competidorActual.nombre}</h2>
-          <p style={{ margin: 0, fontWeight: 'bold', color: '#111' }}>{competidorActual.categoria}</p>
+          <h4 style={{ margin: 0, color: '#666' }}>{competidor.categoria} · {turnos[turnoSeguro].hora} · {user.email}</h4>
+          <h2 style={{ margin: '5px 0 0 0', fontSize: '2rem', color: '#111' }}>#{competidor.dorsal} {competidor.nombre}</h2>
+          <p style={{ margin: 0, fontWeight: 'bold', color: '#111' }}>
+            {competidor.id === programada.id ? `Turno ${turnos[turnoSeguro].orden} de ${turnos.length}` : `Fuera de orden · programada #${programada.dorsal} ${programada.nombre}`}
+          </p>
         </div>
         <div style={{ textAlign: 'center' }}>
-            <h1 style={{ margin: 0, fontSize: '3rem', color: '#111' }}>{intentos}</h1>
-            <p style={{ margin: 0, color: '#111' }}>Intentos</p>
+          <h1 style={{ margin: 0, fontSize: '3rem', color: '#111' }}>{score.intentos}</h1>
+          <p style={{ margin: 0, color: '#111' }}>Intentos</p>
         </div>
       </div>
 
-      {/* Botonera Gigante */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flexGrow: 1 }}>
-        <button 
-          onClick={() => registrarAccion('INTENTO')}
-          disabled={topAlcanzado}
-          style={{ flexGrow: 1, fontSize: '2.5rem', backgroundColor: topAlcanzado ? '#ccc' : '#e0e0e0', border: 'none', borderRadius: '12px', fontWeight: 'bold', touchAction: 'manipulation' }}>
-          + INTENTO
+      {!editando && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <button onClick={() => fijarTurno(turnoSeguro - 1)} disabled={turnoSeguro === 0} style={{ padding: '0.9rem', fontSize: '1rem', border: 'none', borderRadius: '8px', backgroundColor: '#e0e0e0' }}>Anterior</button>
+          <button onClick={() => { setBuscando((abierto) => !abierto); setDorsalBusqueda(''); }} style={{ flex: 1, padding: '0.9rem', fontSize: '1rem', fontWeight: 'bold', border: 'none', borderRadius: '8px', backgroundColor: '#fff3cd' }}>Buscar dorsal</button>
+          <button onClick={() => fijarTurno(turnoSeguro + 1)} disabled={turnoSeguro === turnos.length - 1} style={{ padding: '0.9rem', fontSize: '1rem', border: 'none', borderRadius: '8px', backgroundColor: '#111', color: '#fff' }}>Siguiente</button>
+        </div>
+      )}
+
+      {buscando && !editando && (
+        <BuscadorDorsal
+          dorsal={dorsalBusqueda}
+          onDorsal={setDorsalBusqueda}
+          onElegir={elegirCompetidor}
+        />
+      )}
+
+      {!buscando && !editando && competidor.id !== programada.id && (
+        <button onClick={() => elegirCompetidor(programada.id)} style={{ marginBottom: '0.75rem', padding: '0.8rem', border: 'none', borderRadius: '8px', backgroundColor: '#d4edda', fontWeight: 'bold' }}>
+          Volver al orden: #{programada.dorsal} {programada.nombre}
         </button>
+      )}
 
-        <div style={{ display: 'flex', gap: '1rem', flexGrow: 1.5 }}>
-          <button 
-            onClick={() => registrarAccion('ZONA')}
-            disabled={zonaAlcanzada || topAlcanzado}
-            style={{ flexGrow: 1, fontSize: '2.5rem', backgroundColor: zonaAlcanzada ? '#ffc107' : '#fff3cd', border: zonaAlcanzada ? '4px solid #d39e00' : '2px solid #ffc107', borderRadius: '12px', fontWeight: 'bold', touchAction: 'manipulation' }}>
-            {zonaAlcanzada ? (
-              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1 }}>
-                <span>ZONA ✅</span>
-                <span style={{ fontSize: '1.5rem' }}>Intento {intentoZona}</span>
-              </span>
-            ) : 'MARCAR ZONA'}
-          </button>
-
-          <button 
-            onClick={() => registrarAccion('TOP')}
-            disabled={topAlcanzado}
-            style={{ flexGrow: 1, fontSize: '2.5rem', backgroundColor: topAlcanzado ? '#28a745' : '#d4edda', border: topAlcanzado ? '4px solid #1e7e34' : '2px solid #28a745', borderRadius: '12px', fontWeight: 'bold', touchAction: 'manipulation' }}>
-            {topAlcanzado ? (
-              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1 }}>
-                <span>TOP ✅</span>
-                <span style={{ fontSize: '1.5rem' }}>Intento {intentoTop}</span>
-              </span>
-            ) : 'MARCAR TOP'}
-          </button>
+      {!buscando && !editando && (
+        <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', marginBottom: '0.75rem' }}>
+          {turnos.slice(turnoSeguro + 1).map((turno) => (
+            <button
+              key={turno.competidor.id}
+              onClick={() => fijarTurno(turno.orden - 1)}
+              style={{ flex: '0 0 auto', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#fff', fontWeight: 'bold' }}>
+              #{turno.competidor.dorsal} {turno.hora}
+            </button>
+          ))}
         </div>
-      </div>
+      )}
 
-      {/* Barra inferior de control */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1rem' }}>
+      {!listo && <p style={{ textAlign: 'center' }}>Cargando resultado...</p>}
+
+      {listo && !editando && !buscando && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flexGrow: 1 }}>
+          <button
+            onClick={sumarIntento}
+            disabled={hayTop}
+            style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayTop ? '#ccc' : '#e0e0e0' }}>
+            + INTENTO
+          </button>
+
+          <div style={{ display: 'flex', gap: '1rem', flexGrow: 1.5 }}>
+            <button
+              onClick={marcarZona}
+              disabled={hayZona || !puedeMarcar}
+              style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayZona ? '#ffc107' : '#fff3cd', border: hayZona ? '4px solid #d39e00' : '2px solid #ffc107' }}>
+              {hayZona ? (
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1 }}>
+                  <span>ZONA ✅</span>
+                  <span style={{ fontSize: '1.5rem' }}>Intento {score.zonaEnIntento}</span>
+                </span>
+              ) : 'MARCAR ZONA'}
+            </button>
+
+            <button
+              onClick={marcarTop}
+              disabled={!puedeMarcar}
+              style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayTop ? '#28a745' : '#d4edda', border: hayTop ? '4px solid #1e7e34' : '2px solid #28a745' }}>
+              {hayTop ? (
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1 }}>
+                  <span>TOP ✅</span>
+                  <span style={{ fontSize: '1.5rem' }}>Intento {score.topEnIntento}</span>
+                </span>
+              ) : 'MARCAR TOP'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {listo && editando && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flexGrow: 1 }}>
+          <Stepper etiqueta="Intentos totales" valor={borrador.intentos} onMenos={() => cambiarBorrador('intentos', -1)} onMas={() => cambiarBorrador('intentos', 1)} />
+          <Stepper etiqueta="Zona en el intento" valor={borrador.zonaEnIntento} vacio="Sin zona" onMenos={() => cambiarBorrador('zonaEnIntento', -1)} onMas={() => cambiarBorrador('zonaEnIntento', 1)} />
+          <Stepper etiqueta="Top en el intento" valor={borrador.topEnIntento} vacio="Sin top" onMenos={() => cambiarBorrador('topEnIntento', -1)} onMas={() => cambiarBorrador('topEnIntento', 1)} />
+          {errorEdicion && <p style={{ margin: 0, color: '#dc3545', fontWeight: 'bold' }}>{errorEdicion}</p>}
+          <p style={{ margin: 0, color: '#666' }}>Si marcas top sin zona, la zona queda en el mismo intento.</p>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', marginTop: '1rem' }}>
         <button onClick={() => signOut(auth)} style={{ padding: '1rem', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px' }}>Cerrar Sesión</button>
-        <button onClick={resetearTurno} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Siguiente Competidor ➡️</button>
+        {editando ? (
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button onClick={() => setEditando(false)} style={{ padding: '1rem', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Cancelar</button>
+            <button onClick={guardarEdicion} disabled={guardando} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>
+              {guardando ? 'Guardando...' : 'Actualizar'}
+            </button>
+          </div>
+        ) : (
+          <button onClick={abrirEdicion} disabled={!listo} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Editar</button>
+        )}
       </div>
+    </div>
+  );
+}
 
+function BuscadorDorsal({ dorsal, onDorsal, onElegir }) {
+  const coincidencias = buscarPorDorsal(dorsal);
+  return (
+    <div style={{ marginBottom: '0.75rem' }}>
+      <input
+        inputMode="numeric"
+        autoFocus
+        placeholder="Número de dorsal"
+        value={dorsal}
+        onChange={(event) => onDorsal(event.target.value.replace(/\D/g, ''))}
+        style={{ width: '100%', boxSizing: 'border-box', padding: '1rem', fontSize: '2rem', textAlign: 'center', borderRadius: '8px', border: '2px solid #111' }}
+      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+        {coincidencias.map((competidor) => (
+          <button
+            key={competidor.id}
+            onClick={() => onElegir(competidor.id)}
+            style={{ padding: '1rem', fontSize: '1.4rem', fontWeight: 'bold', textAlign: 'left', borderRadius: '8px', border: 'none', backgroundColor: '#f0f0f0' }}>
+            #{competidor.dorsal} {competidor.nombre}
+          </button>
+        ))}
+        {dorsal && coincidencias.length === 0 && <p style={{ margin: 0, color: '#dc3545' }}>No hay una competidora con ese dorsal.</p>}
+      </div>
+    </div>
+  );
+}
+
+function Stepper({ etiqueta, valor, vacio = '0', onMenos, onMas }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', backgroundColor: '#f7f7f7', borderRadius: '12px', padding: '1rem' }}>
+      <span style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>{etiqueta}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <button onClick={onMenos} style={{ width: '64px', height: '64px', fontSize: '2rem', borderRadius: '12px', border: 'none', backgroundColor: '#e0e0e0' }}>−</button>
+        <span style={{ minWidth: '7rem', textAlign: 'center', fontSize: '1.8rem', fontWeight: 'bold' }}>{valor == null ? vacio : valor}</span>
+        <button onClick={onMas} style={{ width: '64px', height: '64px', fontSize: '2rem', borderRadius: '12px', border: 'none', backgroundColor: '#e0e0e0' }}>+</button>
+      </div>
     </div>
   );
 }

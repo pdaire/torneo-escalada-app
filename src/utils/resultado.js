@@ -1,0 +1,96 @@
+import { collection, doc } from 'firebase/firestore';
+
+export const TORNEO_ID = 'torneo_actual';
+
+// Las reglas de Firestore de este proyecto permiten escribir en `intentos`.
+// El documento de estado usa un id fijo (competidor + bloque) y se sobrescribe.
+export function resultadoDocRef(db, competidorId, boulderId) {
+  return doc(db, 'intentos', `${competidorId}_${boulderId}`);
+}
+
+export function resultadosColRef(db) {
+  return collection(db, 'intentos');
+}
+
+export function resultadoVacio() {
+  return { intentos: 0, zonaEnIntento: null, topEnIntento: null };
+}
+
+export function leerResultado(data) {
+  if (!data) return resultadoVacio();
+  return {
+    intentos: data.intentos ?? 0,
+    zonaEnIntento: data.zonaEnIntento ?? null,
+    topEnIntento: data.topEnIntento ?? null,
+  };
+}
+
+// El top implica zona. Si no había zona, queda en el mismo intento.
+export function prepararResultado(resultado) {
+  const next = {
+    intentos: resultado.intentos,
+    zonaEnIntento: resultado.zonaEnIntento,
+    topEnIntento: resultado.topEnIntento,
+  };
+  if (next.topEnIntento != null && next.zonaEnIntento == null) {
+    next.zonaEnIntento = next.topEnIntento;
+  }
+  return next;
+}
+
+export function validarResultado({ intentos, zonaEnIntento, topEnIntento }) {
+  if (!Number.isInteger(intentos) || intentos < 0) {
+    return 'Los intentos totales tienen que ser un número entero, cero o más.';
+  }
+  if (zonaEnIntento != null && (!Number.isInteger(zonaEnIntento) || zonaEnIntento < 1 || zonaEnIntento > intentos)) {
+    return 'La zona tiene que caer en un intento entre 1 y el total.';
+  }
+  if (topEnIntento != null && (!Number.isInteger(topEnIntento) || topEnIntento < 1 || topEnIntento > intentos)) {
+    return 'El top tiene que caer en un intento entre 1 y el total.';
+  }
+  if (topEnIntento != null && zonaEnIntento != null && zonaEnIntento > topEnIntento) {
+    return 'La zona no puede quedar en un intento posterior al top.';
+  }
+  return '';
+}
+
+export function rankingFromResultados(docs) {
+  const agrupado = {};
+
+  docs.forEach((dato) => {
+    if (!dato.competidorId) return;
+    if (!agrupado[dato.competidorId]) {
+      agrupado[dato.competidorId] = {
+        id: dato.competidorId,
+        nombre: dato.nombre,
+        dorsal: dato.dorsal,
+        categoria: dato.categoria,
+        boulders: {},
+      };
+    }
+    agrupado[dato.competidorId].boulders[dato.boulderId] = {
+      zonaEnIntento: dato.zonaEnIntento ?? null,
+      topEnIntento: dato.topEnIntento ?? null,
+    };
+  });
+
+  return Object.values(agrupado).map((comp) => {
+    let T = 0;
+    let z = 0;
+    let aT = 0;
+    let aZ = 0;
+
+    Object.values(comp.boulders).forEach((boulder) => {
+      if (boulder.topEnIntento != null) {
+        T += 1;
+        aT += boulder.topEnIntento;
+      }
+      if (boulder.zonaEnIntento != null) {
+        z += 1;
+        aZ += boulder.zonaEnIntento;
+      }
+    });
+
+    return { ...comp, T, z, aT, aZ };
+  });
+}
