@@ -25,6 +25,9 @@ const botonBase = {
   borderRadius: '12px',
   fontWeight: 'bold',
   touchAction: 'manipulation',
+  color: '#111',
+  whiteSpace: 'normal',
+  minWidth: 0,
 };
 
 export default function JuezView() {
@@ -303,7 +306,7 @@ export default function JuezView() {
   const puedeMarcar = score.intentos >= 1 && !hayTop;
 
   return (
-    <div style={{ padding: '1rem', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', minHeight: '100svh', color: '#111', backgroundColor: '#fff', boxSizing: 'border-box' }}>
+    <div style={{ width: '100%', maxWidth: '100%', padding: '1rem', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', minHeight: '100svh', color: '#111', backgroundColor: '#fff', boxSizing: 'border-box', overflowX: 'hidden' }}>
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
         {boulders.map((id) => (
           <button
@@ -339,7 +342,7 @@ export default function JuezView() {
 
       {!editando && (
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <button onClick={() => fijarTurno(turnoSeguro - 1)} disabled={turnoSeguro === 0} style={{ padding: '0.9rem', fontSize: '1rem', border: 'none', borderRadius: '8px', backgroundColor: '#e0e0e0' }}>Anterior</button>
+          <button onClick={() => fijarTurno(turnoSeguro - 1)} disabled={turnoSeguro === 0} style={{ padding: '0.9rem', fontSize: '1rem', border: 'none', borderRadius: '8px', backgroundColor: '#e0e0e0', color: '#111' }}>Anterior</button>
           <button onClick={() => { setBuscando((abierto) => !abierto); setDorsalBusqueda(''); }} style={{ flex: 1, padding: '0.9rem', fontSize: '1rem', fontWeight: 'bold', border: 'none', borderRadius: '8px', backgroundColor: '#fff3cd' }}>Buscar dorsal</button>
           <button onClick={() => fijarTurno(turnoSeguro + 1)} disabled={!turnos.length || turnoSeguro === turnos.length - 1} style={{ padding: '0.9rem', fontSize: '1rem', border: 'none', borderRadius: '8px', backgroundColor: '#111', color: '#fff' }}>Siguiente</button>
         </div>
@@ -360,16 +363,19 @@ export default function JuezView() {
         </button>
       )}
 
-      {!buscando && !editando && (
-        <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', marginBottom: '0.75rem' }}>
-          {turnos.slice(turnoSeguro + 1).map((turno) => (
-            <button
-              key={turno.competidor.id}
-              onClick={() => fijarTurno(turno.orden - 1)}
-              style={{ flex: '0 0 auto', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#fff', fontWeight: 'bold' }}>
-              #{turno.competidor.dorsal} {turno.hora}
-            </button>
-          ))}
+      {!buscando && !editando && turnos.length > turnoSeguro + 1 && (
+        <div style={{ marginBottom: '0.75rem', minWidth: 0, maxWidth: '100%' }}>
+          <p style={{ margin: '0 0 0.35rem', fontSize: '0.85rem', fontWeight: 'bold', color: '#555' }}>Después en este bloque</p>
+          <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', minWidth: 0, maxWidth: '100%' }}>
+            {turnos.slice(turnoSeguro + 1).map((turno) => (
+              <button
+                key={turno.id}
+                onClick={() => fijarTurno(turno.orden - 1)}
+                style={{ flex: '0 0 auto', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #ccc', backgroundColor: '#f4f4f4', color: '#111', fontWeight: 'bold' }}>
+                #{turno.competidor.dorsal} {turno.competidor.nombre} · {turno.hora}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -384,29 +390,25 @@ export default function JuezView() {
             + INTENTO
           </button>
 
-          <div style={{ display: 'flex', gap: '1rem', flexGrow: 1.5 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '0.75rem', flexGrow: 1.5 }}>
             <button
               onClick={marcarZona}
               disabled={hayZona || !puedeMarcar}
-              style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayZona ? '#ffc107' : '#fff3cd', border: hayZona ? '4px solid #d39e00' : '2px solid #ffc107' }}>
-              {hayZona ? (
-                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1 }}>
-                  <span>ZONA ✅</span>
-                  <span style={{ fontSize: '1.5rem' }}>Intento {score.zonaEnIntento}</span>
-                </span>
-              ) : 'MARCAR ZONA'}
+              style={{ ...botonBase, width: '100%', fontSize: '1.6rem', padding: '1.25rem 0.4rem', backgroundColor: hayZona ? '#ffc107' : '#fff3cd', border: hayZona ? '4px solid #d39e00' : '2px solid #ffc107' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.05 }}>
+                <span>{hayZona ? 'ZONA ✅' : 'MARCAR'}</span>
+                <span style={{ fontSize: '0.85em' }}>{hayZona ? `Intento ${score.zonaEnIntento}` : 'ZONA'}</span>
+              </span>
             </button>
 
             <button
               onClick={marcarTop}
               disabled={!puedeMarcar}
-              style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayTop ? '#28a745' : '#d4edda', border: hayTop ? '4px solid #1e7e34' : '2px solid #28a745' }}>
-              {hayTop ? (
-                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.1 }}>
-                  <span>TOP ✅</span>
-                  <span style={{ fontSize: '1.5rem' }}>Intento {score.topEnIntento}</span>
-                </span>
-              ) : 'MARCAR TOP'}
+              style={{ ...botonBase, width: '100%', fontSize: '1.6rem', padding: '1.25rem 0.4rem', backgroundColor: hayTop ? '#28a745' : '#d4edda', border: hayTop ? '4px solid #1e7e34' : '2px solid #28a745', color: hayTop ? '#fff' : '#111' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.05 }}>
+                <span>{hayTop ? 'TOP ✅' : 'MARCAR'}</span>
+                <span style={{ fontSize: '0.85em' }}>{hayTop ? `Intento ${score.topEnIntento}` : 'TOP'}</span>
+              </span>
             </button>
           </div>
         </div>

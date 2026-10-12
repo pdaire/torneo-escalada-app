@@ -66,12 +66,20 @@ body {
   box-sizing: border-box;
 }
 
+body.kiosk-mode,
 body.kiosk-mode #root,
 body.public-board #root {
   width: 100%;
   max-width: none;
   border: none;
   text-align: left;
+}
+
+body.kiosk-mode,
+body.kiosk-mode #root {
+  background: #fff;
+  color: #111;
+  color-scheme: light;
 }
 
 body.public-board,
