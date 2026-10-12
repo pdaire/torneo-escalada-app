@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { onSnapshot } from 'firebase/firestore';
+import { onSnapshot, query, where } from 'firebase/firestore';
 import { sortScore } from '../utils/score';
 import { rankingFromResultados, resultadosColRef } from '../utils/resultado';
-import { BOULDERS } from '../data/ordenAbsolutaDamas';
+import { useEtapaActiva } from '../hooks/useEtapaActiva';
 
-const ORDEN_BLOQUES = [...BOULDERS, 'W1'];
-
-function bloquesVisibles(ranking) {
+function bloquesVisibles(ranking, preferidos = []) {
   const presentes = new Set(ranking.flatMap((comp) => Object.keys(comp.boulders)));
-  const ordenados = ORDEN_BLOQUES.filter((boulder) => presentes.has(boulder));
-  const resto = [...presentes].filter((boulder) => !ORDEN_BLOQUES.includes(boulder));
+  const ordenados = preferidos.filter((boulder) => presentes.has(boulder));
+  const resto = [...presentes].filter((boulder) => !ordenados.includes(boulder));
   return [...ordenados, ...resto];
 }
 
@@ -25,6 +23,7 @@ function celdaBoulder(boulder) {
 export default function PublicDashboard() {
   const [ranking, setRanking] = useState([]);
   const [errorCarga, setErrorCarga] = useState('');
+  const { competencia, etapa, cargando } = useEtapaActiva();
 
   useEffect(() => {
     document.body.classList.add('public-board');
@@ -32,8 +31,16 @@ export default function PublicDashboard() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(resultadosColRef(db), (snapshot) => {
-      const rankingActual = rankingFromResultados(snapshot.docs.map((docSnap) => docSnap.data()));
+    if (!competencia || !etapa) {
+      setRanking([]);
+      return undefined;
+    }
+    const consulta = query(resultadosColRef(db), where('competenciaId', '==', competencia.id));
+    return onSnapshot(consulta, (snapshot) => {
+      const deLaEtapa = snapshot.docs
+        .map((item) => item.data())
+        .filter((item) => item.etapaId === etapa.id);
+      const rankingActual = rankingFromResultados(deLaEtapa);
       rankingActual.sort(sortScore);
       setRanking(rankingActual);
       setErrorCarga('');
@@ -41,19 +48,17 @@ export default function PublicDashboard() {
       console.error('Error al escuchar resultados:', error);
       setErrorCarga('No se pudieron cargar los resultados. Revisa la conexión o las reglas de Firestore.');
     });
+  }, [competencia?.id, etapa?.id]);
 
-    return () => unsubscribe();
-  }, []);
-
-  const bloques = bloquesVisibles(ranking);
-  const categorias = [...new Set(ranking.map((comp) => comp.categoria).filter(Boolean))];
-  const titulo = categorias.length === 1 ? `Resultados ${categorias[0]}` : 'Resultados';
+  const bloques = bloquesVisibles(ranking, etapa?.boulders || []);
+  const titulo = etapa ? `Resultados ${etapa.nombre}` : 'Resultados';
 
   return (
     <div style={{ backgroundColor: '#121212', color: '#ffffff', minHeight: '100vh', padding: '2rem', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
       <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
         <h3 style={{ color: '#ff4757', margin: 0, textTransform: 'uppercase', letterSpacing: '2px' }}>En Vivo</h3>
-        <h1 style={{ margin: '5px 0', fontSize: '3rem', color: '#ffffff' }}>{titulo}</h1>
+        <h1 style={{ margin: '5px 0', fontSize: '3rem', color: '#ffffff' }}>{cargando ? 'Cargando...' : titulo}</h1>
+        {competencia && <p style={{ color: '#aaa' }}>{competencia.nombre}</p>}
       </div>
 
       <div style={{ maxWidth: '1100px', margin: '0 auto', backgroundColor: '#1e1e1e', borderRadius: '12px', overflowX: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
@@ -94,7 +99,7 @@ export default function PublicDashboard() {
             {ranking.length === 0 && (
               <tr>
                 <td colSpan={3 + bloques.length} style={{ padding: '3rem', color: '#666' }}>
-                  {errorCarga || 'Esperando a que los jueces registren resultados...'}
+                  {errorCarga || (etapa ? 'Esperando a que los jueces registren resultados...' : 'No hay una etapa activa.')}
                 </td>
               </tr>
             )}

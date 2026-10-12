@@ -2,17 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { Link } from 'react-router-dom';
 import {
-  TORNEO_ID,
   leerResultado,
   prepararResultado,
   resultadoDocRef,
   resultadoVacio,
   validarResultado,
 } from '../utils/resultado';
-import { BOULDERS, COMPETIDORES, buscarPorDorsal, turnosDe } from '../data/ordenAbsolutaDamas';
-
-const COMPETIDORES_POR_ID = Object.fromEntries(COMPETIDORES.map((competidor) => [competidor.id, competidor]));
+import { useEtapaActiva } from '../hooks/useEtapaActiva';
 
 function leerPreferencia(clave, valorInicial) {
   try {
@@ -35,8 +33,9 @@ export default function JuezView() {
   const [pin, setPin] = useState('');
   const [errorLogin, setErrorLogin] = useState('');
 
-  const [boulderId, setBoulderId] = useState(() => leerPreferencia('juez.boulder', 'M1'));
-  const [turnoIndex, setTurnoIndex] = useState(() => Number(leerPreferencia(`juez.turno.${leerPreferencia('juez.boulder', 'M1')}`, '0')) || 0);
+  const { competencia, etapa, competidores, turnos: turnosCrudos, cargando, error: errorConfig } = useEtapaActiva();
+  const [boulderId, setBoulderId] = useState('');
+  const [turnoIndex, setTurnoIndex] = useState(0);
   const [competidorId, setCompetidorId] = useState(null);
   const [buscando, setBuscando] = useState(false);
   const [dorsalBusqueda, setDorsalBusqueda] = useState('');
@@ -52,14 +51,31 @@ export default function JuezView() {
   const colaEscritura = useRef(Promise.resolve());
   const docActivo = useRef('');
   const escribiendoDoc = useRef('');
-  const turnos = turnosDe(boulderId);
-  const turnoSeguro = Math.min(turnoIndex, turnos.length - 1);
-  const programada = turnos[turnoSeguro].competidor;
-  const competidor = (competidorId && turnos.find((turno) => turno.competidor.id === competidorId)?.competidor)
-    || COMPETIDORES_POR_ID[competidorId]
-    || programada;
-  const contextoRef = useRef({ competidor, boulderId });
-  contextoRef.current = { competidor, boulderId };
+  const boulders = etapa?.boulders?.length ? etapa.boulders : [];
+  const competidoresPorId = Object.fromEntries(competidores.map((item) => [item.id, item]));
+  const turnos = turnosCrudos
+    .filter((turno) => etapa && turno.etapaId === etapa.id && turno.boulderId === boulderId && competidoresPorId[turno.competidorId])
+    .sort((a, b) => a.orden - b.orden)
+    .map((turno) => ({ ...turno, hora: turno.horaProgramada, competidor: competidoresPorId[turno.competidorId] }));
+  const turnoSeguro = turnos.length ? Math.min(turnoIndex, turnos.length - 1) : 0;
+  const programada = turnos[turnoSeguro]?.competidor;
+  const competidor = competidoresPorId[competidorId] || programada || null;
+  const contextoRef = useRef({});
+  contextoRef.current = { competidor, boulderId, competenciaId: competencia?.id, etapaId: etapa?.id };
+
+  useEffect(() => {
+    if (!etapa || !user) return;
+    const asignado = etapa.asignaciones?.[user.email];
+    const preferido = asignado || leerPreferencia(`juez.boulder.${etapa.id}`, boulders[0] || '');
+    setBoulderId(boulders.includes(preferido) ? preferido : (boulders[0] || ''));
+  }, [etapa?.id, user?.email]);
+
+  useEffect(() => {
+    if (!etapa || !boulderId) return;
+    const guardado = Number(leerPreferencia(`juez.turno.${etapa.id}.${boulderId}`, '0'));
+    setTurnoIndex(Number.isInteger(guardado) ? guardado : 0);
+    setCompetidorId(null);
+  }, [etapa?.id, boulderId]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (usuarioActual) => {
@@ -75,15 +91,16 @@ export default function JuezView() {
   }, []);
 
   useEffect(() => {
-    if (!user || !competidor) return undefined;
-    const docId = `${competidor.id}_${boulderId}`;
+    if (!user || !competidor || !competencia || !etapa) return undefined;
+    const clave = { competenciaId: competencia.id, etapaId: etapa.id, competidorId: competidor.id, boulderId };
+    const docId = `${clave.competenciaId}__${clave.etapaId}__${clave.competidorId}__${clave.boulderId}`;
     docActivo.current = docId;
     const vacio = resultadoVacio();
     scoreRef.current = vacio;
     setScore(vacio);
     setListo(false);
     setEditando(false);
-    const unsubscribe = onSnapshot(resultadoDocRef(db, competidor.id, boulderId), (snap) => {
+    const unsubscribe = onSnapshot(resultadoDocRef(db, clave), (snap) => {
       if (docActivo.current !== docId) return;
       if (escriturasPendientes.current > 0 && escribiendoDoc.current === docId) return;
       const next = leerResultado(snap.data());
@@ -96,7 +113,7 @@ export default function JuezView() {
       alert('No se pudo leer el resultado. Revisa tu conexión.');
     });
     return () => unsubscribe();
-  }, [user, competidor.id, boulderId]);
+  }, [user, competidor?.id, boulderId, competencia?.id, etapa?.id]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -108,15 +125,16 @@ export default function JuezView() {
     }
   };
 
-  const persistir = async (next, competidorActual, boulderActual) => {
-    await setDoc(resultadoDocRef(db, competidorActual.id, boulderActual), {
-      torneoId: TORNEO_ID,
-      competidorId: competidorActual.id,
-      nombre: competidorActual.nombre,
-      dorsal: competidorActual.dorsal,
-      categoria: competidorActual.categoria,
-      categoriaId: competidorActual.categoriaId,
-      boulderId: boulderActual,
+  const persistir = async (next, contexto) => {
+    await setDoc(resultadoDocRef(db, contexto), {
+      competenciaId: contexto.competenciaId,
+      etapaId: contexto.etapaId,
+      competidorId: contexto.competidor.id,
+      nombre: contexto.competidor.nombre,
+      dorsal: contexto.competidor.dorsal,
+      categoria: contexto.competidor.categoria,
+      categoriaId: contexto.competidor.categoriaId,
+      boulderId: contexto.boulderId,
       intentos: next.intentos,
       zonaEnIntento: next.zonaEnIntento,
       topEnIntento: next.topEnIntento,
@@ -125,12 +143,13 @@ export default function JuezView() {
     });
   };
 
-  const encolarEscritura = (next, competidorActual, boulderActual) => {
-    const docId = `${competidorActual.id}_${boulderActual}`;
+  const encolarEscritura = (next) => {
+    const contexto = { ...contextoRef.current, competidor: contextoRef.current.competidor };
+    const docId = `${contexto.competenciaId}__${contexto.etapaId}__${contexto.competidor.id}__${contexto.boulderId}`;
     escribiendoDoc.current = docId;
     escriturasPendientes.current += 1;
     colaEscritura.current = colaEscritura.current
-      .then(() => persistir(next, competidorActual, boulderActual))
+      .then(() => persistir(next, contexto))
       .catch((error) => {
         console.error('Error al guardar:', error);
         alert('Error al guardar. Revisa tu conexión.');
@@ -141,11 +160,10 @@ export default function JuezView() {
   };
 
   const aplicar = (mutator) => {
-    const { competidor: competidorActual, boulderId: boulderActual } = contextoRef.current;
     const next = mutator({ ...scoreRef.current });
     scoreRef.current = next;
     setScore(next);
-    encolarEscritura(next, competidorActual, boulderActual);
+    encolarEscritura(next);
   };
 
   const sumarIntento = () => {
@@ -205,15 +223,15 @@ export default function JuezView() {
       setErrorEdicion(error);
       return;
     }
-    const { competidor: competidorActual, boulderId: boulderActual } = contextoRef.current;
+    const contexto = contextoRef.current;
     setGuardando(true);
     scoreRef.current = preparado;
     setScore(preparado);
     setBorrador(preparado);
-    escribiendoDoc.current = `${competidorActual.id}_${boulderActual}`;
+    escribiendoDoc.current = `${contexto.competenciaId}__${contexto.etapaId}__${contexto.competidor.id}__${contexto.boulderId}`;
     escriturasPendientes.current += 1;
     colaEscritura.current = colaEscritura.current
-      .then(() => persistir(preparado, competidorActual, boulderActual))
+      .then(() => persistir(preparado, contexto))
       .then(() => setEditando(false))
       .catch((error) => {
         console.error('Error al guardar la corrección:', error);
@@ -226,19 +244,19 @@ export default function JuezView() {
   };
 
   const elegirBoulder = (id) => {
-    const indiceGuardado = Number(leerPreferencia(`juez.turno.${id}`, '0'));
-    const indice = Number.isInteger(indiceGuardado) ? indiceGuardado : 0;
-    localStorage.setItem('juez.boulder', id);
+    const indiceGuardado = Number(leerPreferencia(`juez.turno.${etapa.id}.${id}`, '0'));
+    localStorage.setItem(`juez.boulder.${etapa.id}`, id);
     setBoulderId(id);
-    setTurnoIndex(indice);
+    setTurnoIndex(Number.isInteger(indiceGuardado) ? indiceGuardado : 0);
     setCompetidorId(null);
     setBuscando(false);
     setDorsalBusqueda('');
   };
 
   const fijarTurno = (indice) => {
+    if (!turnos.length) return;
     const acotado = Math.max(0, Math.min(indice, turnos.length - 1));
-    localStorage.setItem(`juez.turno.${boulderId}`, String(acotado));
+    localStorage.setItem(`juez.turno.${etapa.id}.${boulderId}`, String(acotado));
     setTurnoIndex(acotado);
     setCompetidorId(turnos[acotado].competidor.id);
     setBuscando(false);
@@ -265,6 +283,21 @@ export default function JuezView() {
     );
   }
 
+  if (cargando) {
+    return <main style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Cargando competencia...</main>;
+  }
+
+  if (!etapa) {
+    return (
+      <main style={{ padding: '2rem', fontFamily: 'sans-serif', textAlign: 'center' }}>
+        <h2>No hay una etapa activa</h2>
+        <p>Carga la competencia, las competidoras y el orden de paso antes de puntuar.</p>
+        <Link to="/admin">Ir a administrar</Link>
+        {errorConfig && <p>{errorConfig}</p>}
+      </main>
+    );
+  }
+
   const hayTop = score.topEnIntento != null;
   const hayZona = score.zonaEnIntento != null;
   const puedeMarcar = score.intentos >= 1 && !hayTop;
@@ -272,7 +305,7 @@ export default function JuezView() {
   return (
     <div style={{ padding: '1rem', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', minHeight: '100svh', color: '#111', backgroundColor: '#fff', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-        {BOULDERS.map((id) => (
+        {boulders.map((id) => (
           <button
             key={id}
             onClick={() => elegirBoulder(id)}
@@ -284,11 +317,19 @@ export default function JuezView() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0f0f0', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem' }}>
         <div>
-          <h4 style={{ margin: 0, color: '#666' }}>{competidor.categoria} · {turnos[turnoSeguro].hora} · {user.email}</h4>
-          <h2 style={{ margin: '5px 0 0 0', fontSize: '2rem', color: '#111' }}>#{competidor.dorsal} {competidor.nombre}</h2>
-          <p style={{ margin: 0, fontWeight: 'bold', color: '#111' }}>
-            {competidor.id === programada.id ? `Turno ${turnos[turnoSeguro].orden} de ${turnos.length}` : `Fuera de orden · programada #${programada.dorsal} ${programada.nombre}`}
-          </p>
+          <h4 style={{ margin: 0, color: '#666' }}>{etapa.nombre} · {competencia.nombre} · {user.email}</h4>
+          {competidor ? (
+            <>
+              <h2 style={{ margin: '5px 0 0 0', fontSize: '2rem', color: '#111' }}>#{competidor.dorsal} {competidor.nombre}</h2>
+              <p style={{ margin: 0, fontWeight: 'bold', color: '#111' }}>
+                {programada && competidor.id === programada.id
+                  ? `Turno ${turnos[turnoSeguro].orden} de ${turnos.length} · ${turnos[turnoSeguro].hora}`
+                  : `Fuera de orden${programada ? ` · programada #${programada.dorsal} ${programada.nombre}` : ''}`}
+              </p>
+            </>
+          ) : (
+            <h2 style={{ margin: '5px 0 0 0', fontSize: '1.4rem', color: '#111' }}>Este bloque no tiene orden de paso. Busca por dorsal.</h2>
+          )}
         </div>
         <div style={{ textAlign: 'center' }}>
           <h1 style={{ margin: 0, fontSize: '3rem', color: '#111' }}>{score.intentos}</h1>
@@ -300,19 +341,20 @@ export default function JuezView() {
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <button onClick={() => fijarTurno(turnoSeguro - 1)} disabled={turnoSeguro === 0} style={{ padding: '0.9rem', fontSize: '1rem', border: 'none', borderRadius: '8px', backgroundColor: '#e0e0e0' }}>Anterior</button>
           <button onClick={() => { setBuscando((abierto) => !abierto); setDorsalBusqueda(''); }} style={{ flex: 1, padding: '0.9rem', fontSize: '1rem', fontWeight: 'bold', border: 'none', borderRadius: '8px', backgroundColor: '#fff3cd' }}>Buscar dorsal</button>
-          <button onClick={() => fijarTurno(turnoSeguro + 1)} disabled={turnoSeguro === turnos.length - 1} style={{ padding: '0.9rem', fontSize: '1rem', border: 'none', borderRadius: '8px', backgroundColor: '#111', color: '#fff' }}>Siguiente</button>
+          <button onClick={() => fijarTurno(turnoSeguro + 1)} disabled={!turnos.length || turnoSeguro === turnos.length - 1} style={{ padding: '0.9rem', fontSize: '1rem', border: 'none', borderRadius: '8px', backgroundColor: '#111', color: '#fff' }}>Siguiente</button>
         </div>
       )}
 
       {buscando && !editando && (
         <BuscadorDorsal
           dorsal={dorsalBusqueda}
+          competidores={competidores}
           onDorsal={setDorsalBusqueda}
           onElegir={elegirCompetidor}
         />
       )}
 
-      {!buscando && !editando && competidor.id !== programada.id && (
+      {!buscando && !editando && competidor && programada && competidor.id !== programada.id && (
         <button onClick={() => elegirCompetidor(programada.id)} style={{ marginBottom: '0.75rem', padding: '0.8rem', border: 'none', borderRadius: '8px', backgroundColor: '#d4edda', fontWeight: 'bold' }}>
           Volver al orden: #{programada.dorsal} {programada.nombre}
         </button>
@@ -333,7 +375,7 @@ export default function JuezView() {
 
       {!listo && <p style={{ textAlign: 'center' }}>Cargando resultado...</p>}
 
-      {listo && !editando && !buscando && (
+      {listo && competidor && !editando && !buscando && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flexGrow: 1 }}>
           <button
             onClick={sumarIntento}
@@ -390,15 +432,19 @@ export default function JuezView() {
             </button>
           </div>
         ) : (
-          <button onClick={abrirEdicion} disabled={!listo} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Editar</button>
+          <button onClick={abrirEdicion} disabled={!listo || !competidor} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Editar</button>
         )}
+        <Link to="/admin" style={{ alignSelf: 'center' }}>Administrar</Link>
       </div>
     </div>
   );
 }
 
-function BuscadorDorsal({ dorsal, onDorsal, onElegir }) {
-  const coincidencias = buscarPorDorsal(dorsal);
+function BuscadorDorsal({ dorsal, competidores, onDorsal, onElegir }) {
+  const consulta = dorsal.trim();
+  const coincidencias = consulta
+    ? competidores.filter((competidor) => String(competidor.dorsal).startsWith(consulta))
+    : [];
   return (
     <div style={{ marginBottom: '0.75rem' }}>
       <input

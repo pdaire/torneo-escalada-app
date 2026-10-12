@@ -1,15 +1,15 @@
 import { collection, doc } from 'firebase/firestore';
 
-export const TORNEO_ID = 'torneo_actual';
+export function idResultado({ competenciaId, etapaId, competidorId, boulderId }) {
+  return [competenciaId, etapaId, competidorId, boulderId].join('__');
+}
 
-// Las reglas de Firestore de este proyecto permiten escribir en `intentos`.
-// El documento de estado usa un id fijo (competidor + bloque) y se sobrescribe.
-export function resultadoDocRef(db, competidorId, boulderId) {
-  return doc(db, 'intentos', `${competidorId}_${boulderId}`);
+export function resultadoDocRef(db, clave) {
+  return doc(db, 'resultados', idResultado(clave));
 }
 
 export function resultadosColRef(db) {
-  return collection(db, 'intentos');
+  return collection(db, 'resultados');
 }
 
 export function resultadoVacio() {
