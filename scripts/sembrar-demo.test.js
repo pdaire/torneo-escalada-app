@@ -1,10 +1,11 @@
-// Carga la competencia demo en los emuladores. Lo usa `npm run demo:local`.
+// Carga las competencias demo en los emuladores. Lo usa `npm run demo:local`.
 // Crea las cuentas demo en el emulador de Authentication y carga la demo como
 // un admin, a través de las reglas, igual que el botón de /admin.
 import { it } from 'vitest';
 import { doc, setDoc } from 'firebase/firestore';
 import { cargarDemo } from '../src/data/cargarDemo';
 import { DEMO_DELEGADO, DEMO_JUEZ } from '../src/data/demo';
+import { demoPrimavera } from '../src/data/demoPrimavera';
 import { cerrar, limpiar, PROYECTO, sinReglas, usuario } from '../tests/rules/emulador';
 
 const ADMIN = 'admin@demo.local';
@@ -25,7 +26,9 @@ it('carga la competencia demo', async () => {
   await fetch(`http://${AUTH}/emulator/v1/projects/${PROYECTO}/accounts`, { method: 'DELETE' });
   await Promise.all([ADMIN, DEMO_JUEZ, DEMO_DELEGADO].map(crearCuenta));
   await setDoc(doc(sinReglas(), `admins/${ADMIN}`), {});
-  await cargarDemo(usuario(ADMIN), ADMIN, []);
+  // Primero la chica; la principal queda como competencia activa.
+  await cargarDemo(usuario(ADMIN), ADMIN, [], () => {}, demoPrimavera());
+  await cargarDemo(usuario(ADMIN), ADMIN, [{ id: 'primavera-el-muro', activa: true }]);
   await cerrar();
   console.log(`\nCuentas demo (clave ${CLAVE}): ${ADMIN} (admin y juez jefe), ${DEMO_JUEZ}, ${DEMO_DELEGADO}\n`);
 }, 60000);

@@ -74,7 +74,7 @@ export const ETAPA_ACTIVA = 'final';
 // Sectores de la ronda americana: cada uno mezcla bloques fáciles y difíciles,
 // para que los jueces no tengan todo el público en el mismo lugar.
 // A: 1, 5, 9, 13, 17, 21 · B: 2, 6, 10, … · C: 3, 7, 11, … · D: 4, 8, 12, …
-function sectoresDemo(boulders) {
+export function sectoresDemo(boulders) {
   const sectores = { A: [], B: [], C: [], D: [] };
   const nombres = Object.keys(sectores);
   boulders.forEach((id, index) => sectores[nombres[index % nombres.length]].push(id));
@@ -105,7 +105,7 @@ export const ETAPAS = Object.fromEntries(RONDAS.map((ronda) => {
   }];
 }));
 
-function generador(semilla) {
+export function generador(semilla) {
   let estado = semilla >>> 0;
   return () => {
     estado = (estado + 0x6D2B79F5) >>> 0;
@@ -116,7 +116,7 @@ function generador(semilla) {
   };
 }
 
-function acotar(valor, minimo, maximo) {
+export function acotar(valor, minimo, maximo) {
   return Math.min(maximo, Math.max(minimo, valor));
 }
 
@@ -138,7 +138,7 @@ function simularBloque(azar, nivel, dificultad, maxIntentos) {
 
 // Ronda americana: cada competidora prueba bloques cerca de su nivel, con hasta 5 intentos.
 // Mientras más difícil el bloque (número más alto), menos probable encadenarlo.
-function simularAmericana(azar, nivel, etapa) {
+export function simularAmericana(azar, nivel, etapa) {
   const total = etapa.boulders.length;
   const resultados = [];
   etapa.boulders.forEach((boulderId, index) => {
@@ -256,5 +256,26 @@ export function generarDemo() {
     resultados,
     etapasCerradas: RONDAS.map((r) => r.id).filter((id) => id !== ETAPA_ACTIVA),
     categoriasCerradasFinal: CATEGORIAS.map((item) => item.id).filter((id) => id !== CATEGORIA_EN_CURSO),
+  };
+}
+
+// La demo principal como la usa cargarDemo: competencia, etapas, plantel, resultados y roles.
+export function demoPrincipal() {
+  const { competidores, turnos, resultados, etapasCerradas, categoriasCerradasFinal } = generarDemo();
+  return {
+    id: DEMO_ID,
+    nombre: 'Competencia demo',
+    etapas: Object.values(ETAPAS),
+    etapaActiva: ETAPA_ACTIVA,
+    competidores,
+    turnos,
+    resultados,
+    etapasCerradas,
+    categoriasCerradas: { [ETAPA_ACTIVA]: categoriasCerradasFinal },
+    // Final: todos los bloques. Clasificatoria (ronda americana): sectores A y B.
+    asignacionesJuez: {
+      [ETAPA_ACTIVA]: ETAPAS[ETAPA_ACTIVA].boulders,
+      clasificatoria: [...ETAPAS.clasificatoria.sectores.A, ...ETAPAS.clasificatoria.sectores.B],
+    },
   };
 }

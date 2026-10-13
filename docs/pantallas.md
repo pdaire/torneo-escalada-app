@@ -103,7 +103,7 @@ Solo `/juez` se instala. El tablero, la ficha, `/admin` y `/delegado` siguen sie
 
 Solo para cuentas que están en `admins`.
 
-1. Crear una competencia, o cargar la competencia demo (ver abajo). En desarrollo (`npm run dev`) también se puede cargar el ejemplo Baguales 2026.
+1. Crear una competencia, o cargar una de las demos (ver abajo). En desarrollo (`npm run dev`) también se puede cargar el ejemplo Baguales 2026.
 2. Marcar una competencia como activa. Solo una queda activa.
 3. Agregar etapas (qualis, semifinal, final) con su formato y, si corresponde, la etapa previa.
    - **World Climbing:** bloques (por ejemplo W1–W4, M1–M4) y duración del turno.
@@ -114,9 +114,17 @@ Solo para cuentas que están en `admins`.
 5. Generar el orden de paso por etapa, categoría y bloques marcados. Con una etapa previa, se puede generar con sus primeras N clasificadas, en orden inverso al ranking. Reordenarlo con Subir y Bajar.
 6. Agregar jueces, juez jefe y delegados por correo. Asignar a cada juez uno o más bloques por etapa; en una ronda americana con sectores, se asignan sectores.
 
-### Competencia demo
+### Competencias demo
 
-**Cargar o reiniciar competencia demo** crea la competencia `demo` y la deja activa, así que el tablero público pasa a mostrarla. Para volver a la competencia real, actívala de nuevo.
+Hay dos botones. Cada uno crea (o reinicia) su competencia y la deja activa, así que el tablero público pasa a mostrarla. Para volver a la competencia real, actívala de nuevo. En las dos, `pdaire+juez1@gmail.com` es juez, `pdaire+delegado1@gmail.com` es delegado de "Club Demo" y quien carga la demo queda como juez jefe.
+
+#### Demo Primavera - El Muro
+
+Competencia chica: una sola categoría (General), 20 competidores y una ronda americana de 20 bloques (B1–B20, tabla clásica, suman los 5 mejores) en curso. Cada uno lleva parte de sus bloques y los dos últimos dorsales todavía no empiezan. Sectores A–D; el juez demo tiene A y B. Sirve para mostrar la cartilla del juez sin tocar nada en `/admin`.
+
+#### Demo completa (3 rondas)
+
+Competencia `demo`:
 
 - Seis categorías (Mujeres y Hombres Sub 15, Sub 17 y Adultos), doce competidoras cada una.
 - Tres rondas. Las mujeres escalan bloques W y los hombres bloques M (Women y Men):

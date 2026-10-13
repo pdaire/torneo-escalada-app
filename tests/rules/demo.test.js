@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { cargarDemo } from '../../src/data/cargarDemo';
 import { DEMO_ID, generarDemo } from '../../src/data/demo';
+import { demoPrimavera } from '../../src/data/demoPrimavera';
 import { guardarResultado } from '../../src/utils/resultado';
 import { anonimo, cerrar, denegado, limpiar, permitido, sinReglas, usuario } from './emulador';
 
@@ -90,6 +91,22 @@ describe('competencia demo', () => {
     const publico = anonimo();
     expect((await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/semifinal`))).data().estado).toBe('cerrada');
     expect((await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/final`))).data().categoriasCerradas).toHaveLength(5);
+  });
+
+  it('Primavera - El Muro: se carga activa y el juez anota en sus sectores', async () => {
+    const demo = demoPrimavera();
+    await permitido(cargarDemo(usuario(ADMIN), ADMIN, [{ id: 'otra', activa: true }], () => {}, demo));
+    const publico = anonimo();
+    expect((await getDoc(doc(publico, 'competencias/primavera-el-muro'))).data()).toMatchObject({ nombre: 'Primavera - El Muro', activa: true });
+    expect((await getDoc(doc(publico, 'competencias/primavera-el-muro/etapas/ronda-americana'))).data()).toMatchObject({ activa: true, estado: 'abierta' });
+    const cargados = await getDocs(query(collection(publico, 'resultados'), where('competenciaId', '==', 'primavera-el-muro')));
+    expect(cargados.size).toBe(demo.resultados.length);
+
+    // El último dorsal no ha empezado: el juez anota en B1 (sector A) pero no en B3 (sector C).
+    const juez = usuario('pdaire+juez1@gmail.com');
+    const clave = (boulderId) => ({ competenciaId: 'primavera-el-muro', etapaId: 'ronda-americana', competidorId: 'general-20', boulderId });
+    await permitido(guardarResultado(juez, clave('B1'), { intentos: 1, zonaEnIntento: 1, topEnIntento: 1, version: 1 }, 'top', 'pdaire+juez1@gmail.com'));
+    await denegado(guardarResultado(juez, clave('B3'), { intentos: 1, zonaEnIntento: 1, topEnIntento: 1, version: 1 }, 'top', 'pdaire+juez1@gmail.com'));
   });
 
   it('alguien que no es admin no puede cargarla', async () => {

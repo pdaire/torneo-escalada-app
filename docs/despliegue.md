@@ -72,7 +72,7 @@ Las asignaciones viejas (`asignaciones` dentro de la etapa) ya no se usan. Hay q
 npm run demo:local
 ```
 
-Levanta los emuladores de Firestore y Authentication, carga la competencia demo y abre la app en http://localhost:5174/ contra ellos. No toca la base real y funciona sin internet. Todas las pantallas funcionan con estas cuentas, todas con la clave `demo1234`:
+Levanta los emuladores de Firestore y Authentication, carga las dos demos (la completa queda activa; Primavera - El Muro se activa desde `/admin`) y abre la app en http://localhost:5174/ contra ellos. No toca la base real y funciona sin internet. Todas las pantallas funcionan con estas cuentas, todas con la clave `demo1234`:
 
 | Cuenta | Rol en la demo |
 | --- | --- |

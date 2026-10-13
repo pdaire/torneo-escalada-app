@@ -1,38 +1,34 @@
 import { doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { competenciaRef, competidoresCol, etapasCol, miembroRef, turnosCol } from '../utils/competicion';
 import { agregarResultado, idResultado, resultadosColRef } from '../utils/resultado';
-import { DEMO_DELEGADO, DEMO_ID, DEMO_JUEZ, ETAPA_ACTIVA, ETAPAS, generarDemo } from './demo';
+import { DEMO_DELEGADO, DEMO_JUEZ, demoPrincipal } from './demo';
 
-// Carga o reinicia la competencia demo y la deja activa.
+// Carga o reinicia una competencia demo (la principal por defecto) y la deja activa.
 // Escribe con la sesión del admin, que queda como juez jefe de la demo: así los
 // resultados pasan por las mismas reglas que en una competencia real.
 // Si se corta a medias, volver a cargarla la completa: parte de las versiones vigentes.
-export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () => {}) {
-  const { competidores, turnos, resultados, etapasCerradas, categoriasCerradasFinal } = generarDemo();
-  const C = DEMO_ID;
+export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () => {}, demo = demoPrincipal()) {
+  const { competidores, turnos, resultados, etapasCerradas, categoriasCerradas } = demo;
+  const C = demo.id;
 
   // 1. Competencia, etapas abiertas y miembros.
   onProgreso('Configurando la competencia…');
   const config = writeBatch(db);
-  config.set(competenciaRef(db, C), { nombre: 'Competencia demo', fecha: new Date().toISOString().slice(0, 10), activa: true });
+  config.set(competenciaRef(db, C), { nombre: demo.nombre, fecha: new Date().toISOString().slice(0, 10), activa: true });
   competencias
     .filter((item) => item.id !== C && item.activa)
     .forEach((item) => config.update(competenciaRef(db, item.id), { activa: false }));
-  Object.values(ETAPAS).forEach((etapa) => {
+  demo.etapas.forEach((etapa) => {
     config.set(doc(etapasCol(db, C), etapa.id), {
       ...etapa,
-      activa: etapa.id === ETAPA_ACTIVA,
+      activa: etapa.id === demo.etapaActiva,
       estado: 'abierta',
       categoriasCerradas: [],
     });
   });
   config.set(miembroRef(db, C, DEMO_JUEZ), {
     rol: 'juez', nombre: 'Juez demo', club: '',
-    // Final: todos los bloques. Clasificatoria (ronda americana): sectores A y B.
-    asignaciones: {
-      [ETAPA_ACTIVA]: ETAPAS[ETAPA_ACTIVA].boulders,
-      clasificatoria: [...ETAPAS.clasificatoria.sectores.A, ...ETAPAS.clasificatoria.sectores.B],
-    },
+    asignaciones: demo.asignacionesJuez,
   });
   config.set(miembroRef(db, C, DEMO_DELEGADO), { rol: 'delegado', nombre: 'Delegado demo', club: 'Club Demo', asignaciones: {} });
   if (correoAdmin !== DEMO_JUEZ && correoAdmin !== DEMO_DELEGADO) {
@@ -42,7 +38,7 @@ export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () 
 
   // 2. Competidoras y orden de paso (ids fijos: recargar la demo los sobrescribe).
   // Los turnos de una versión anterior de la demo que ya no existen se borran.
-  onProgreso('Cargando competidoras y orden de paso…');
+  onProgreso(turnos.length ? 'Cargando competidoras y orden de paso…' : 'Cargando competidoras…');
   const plantel = writeBatch(db);
   competidores.forEach(({ id, ...competidor }) => plantel.set(doc(competidoresCol(db, C), id), competidor));
   await plantel.commit();
@@ -106,7 +102,9 @@ export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () 
   }
   onProgreso('Cerrando etapas…');
 
-  // 4. Cierra las rondas terminadas; en la final, todas las categorías menos la que está en curso.
-  await Promise.all(etapasCerradas.map((id) => updateDoc(doc(etapasCol(db, C), id), { estado: 'cerrada' })));
-  await updateDoc(doc(etapasCol(db, C), ETAPA_ACTIVA), { categoriasCerradas: categoriasCerradasFinal });
+  // 4. Cierra las rondas terminadas y las categorías finalizadas.
+  await Promise.all([
+    ...etapasCerradas.map((id) => updateDoc(doc(etapasCol(db, C), id), { estado: 'cerrada' })),
+    ...Object.entries(categoriasCerradas).map(([id, cerradas]) => updateDoc(doc(etapasCol(db, C), id), { categoriasCerradas: cerradas })),
+  ]);
 }

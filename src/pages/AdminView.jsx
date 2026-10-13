@@ -5,7 +5,13 @@ import { arrayRemove, arrayUnion, deleteDoc, doc, getDocs, limit, onSnapshot, qu
 import { auth, db } from '../firebase';
 import { BOULDERS, COMPETIDORES } from '../data/ordenAbsolutaDamas';
 import { cargarDemo } from '../data/cargarDemo';
-import { DEMO_DELEGADO, DEMO_ID, DEMO_JUEZ } from '../data/demo';
+import { DEMO_DELEGADO, DEMO_JUEZ, demoPrincipal } from '../data/demo';
+import { demoPrimavera } from '../data/demoPrimavera';
+
+const DEMOS = [
+  { crear: demoPrincipal, boton: 'Demo completa (3 rondas)' },
+  { crear: demoPrimavera, boton: 'Demo Primavera - El Muro' },
+];
 import { useEsAdmin, useUsuario } from '../hooks/useSesion';
 import { resultadosColRef } from '../utils/resultado';
 import { ordenDeSalida, rankingPorCategoria } from '../utils/ranking';
@@ -252,18 +258,19 @@ export default function AdminView() {
     }));
   };
 
-  const cargarCompetenciaDemo = () => {
-    const pregunta = `¿Cargar la competencia demo y dejarla activa? El tablero público pasará a mostrarla. `
+  const cargarCompetenciaDemo = (crear) => {
+    const demo = crear();
+    const pregunta = `¿Cargar "${demo.nombre}" y dejarla activa? El tablero público pasará a mostrarla. `
       + `Si ya existe, se reinicia: se pierden los resultados anotados en ella.`;
     if (!window.confirm(pregunta)) return;
     setProgresoDemo('Empezando…');
     ejecutar(async () => {
       try {
-        await cargarDemo(db, correo, competencias, setProgresoDemo);
+        await cargarDemo(db, correo, competencias, setProgresoDemo, demo);
       } catch (err) {
         throw new Error(`La demo quedó a medias (${err.code || err.message}). Vuelve a cargarla para completarla.`);
       }
-      setCompetenciaId(DEMO_ID);
+      setCompetenciaId(demo.id);
     }).finally(() => setProgresoDemo(''));
   };
 
@@ -529,17 +536,20 @@ export default function AdminView() {
       <section className="admin-section">
         <h2>Competencia</h2>
         <div className="admin-row">
-          <button onClick={cargarCompetenciaDemo} disabled={Boolean(progresoDemo)} className="admin-btn">
-            {progresoDemo || 'Cargar o reiniciar competencia demo'}
-          </button>
+          {progresoDemo
+            ? <button disabled className="admin-btn">{progresoDemo}</button>
+            : DEMOS.map((item) => (
+              <button key={item.boton} onClick={() => cargarCompetenciaDemo(item.crear)} className="admin-btn">{item.boton}</button>
+            ))}
           {progresoDemo && <strong>No cierres ni recargues esta pestaña hasta que termine.</strong>}
           {import.meta.env.DEV && (
             <button onClick={importarEjemplo} className="admin-btn-secondary">Cargar ejemplo Baguales 2026</button>
           )}
         </div>
         <p className="admin-meta">
-          La demo tiene seis categorías, la clasificatoria cerrada y la final en curso en Mujeres Adultas.
-          Juez: {DEMO_JUEZ}. Delegado: {DEMO_DELEGADO}. Tu cuenta queda como juez jefe de la demo.
+          Cargar una demo la reinicia y la deja activa. <strong>Completa:</strong> seis categorías, clasificatoria en ronda americana,
+          semifinal y final con Mujeres Adultas en curso. <strong>Primavera - El Muro:</strong> una categoría General, 20 competidores,
+          ronda americana en curso. Juez: {DEMO_JUEZ}. Delegado: {DEMO_DELEGADO}. Tu cuenta queda como juez jefe.
         </p>
         <form onSubmit={crearCompetencia} className="admin-row">
           <input name="nombre" placeholder="Nombre" required />

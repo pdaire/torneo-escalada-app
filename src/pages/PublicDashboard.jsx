@@ -97,6 +97,15 @@ function PestanasEtapas({ etapas, seleccionada, onElegir }) {
 
 // Ronda americana: en vez de una columna por bloque (pueden ser 30 o más),
 // los bloques que suman, la cantidad de tops y el total.
+function BloquesQueSuman({ comp, etapa, destellos }) {
+  if (!comp.cuentan.length) return <span className="dorsal">–</span>;
+  return comp.cuentan.map((boulderId) => (
+    <span key={`${boulderId}-${destellos.get(`${comp.id}/${boulderId}`) || ''}`} className={destellos.has(`${comp.id}/${boulderId}`) ? 'bloque-suma celda-destello' : 'bloque-suma'}>
+      {boulderId} <strong>{puntosDeBloque(etapa, boulderId, comp.boulders[boulderId])}</strong>
+    </span>
+  ));
+}
+
 function FilasAmericana({ grupo, etapa, destellos }) {
   return grupo.filas.map((comp) => (
     <tr key={comp.id} className={destellos.has(comp.id) ? 'fila-destello' : undefined}>
@@ -106,14 +115,11 @@ function FilasAmericana({ grupo, etapa, destellos }) {
           {comp.dorsal && <span className="dorsal">#{comp.dorsal} </span>}
           {comp.nombre}
         </Link>
+        {/* En celular los bloques que suman van debajo del nombre. */}
+        <div className="bloques-suman-movil"><BloquesQueSuman comp={comp} etapa={etapa} destellos={destellos} /></div>
       </td>
       <td className="bloques-suman">
-        {comp.cuentan.map((boulderId) => (
-          <span key={`${boulderId}-${destellos.get(`${comp.id}/${boulderId}`) || ''}`} className={destellos.has(`${comp.id}/${boulderId}`) ? 'bloque-suma celda-destello' : 'bloque-suma'}>
-            {boulderId} <strong>{puntosDeBloque(etapa, boulderId, comp.boulders[boulderId])}</strong>
-          </span>
-        ))}
-        {!comp.cuentan.length && <span className="dorsal">–</span>}
+        <BloquesQueSuman comp={comp} etapa={etapa} destellos={destellos} />
       </td>
       <td>{comp.tops}</td>
       <td className="puntaje">
