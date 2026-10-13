@@ -168,7 +168,7 @@ El delegado crea el borrador y lo envía a evaluación. El juez jefe la acepta o
 
 ## Lo que no es una colección
 
-Los bloques no tienen colección. Son la lista `boulders` de la etapa.
+Los bloques no tienen colección. Son la lista `boulders` de la etapa. Cada categoría usa los bloques en que tiene turnos: por ejemplo, W1–W4 para mujeres y M1–M4 para hombres. El tablero y la vista del delegado muestran solo esos.
 
 `intentos` y `apelaciones` en la raíz son colecciones viejas. Las reglas ya no permiten leerlas ni escribirlas.
 

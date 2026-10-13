@@ -9,6 +9,13 @@ export const DEMO_DELEGADO = 'pdaire+delegado1@gmail.com';
 export const CATEGORIA_EN_CURSO = 'mujeres-adultas';
 
 const CUPOS_FINAL = 6;
+// W de Women, M de Men.
+const BLOQUES_MUJERES = ['W1', 'W2', 'W3', 'W4'];
+const BLOQUES_HOMBRES = ['M1', 'M2', 'M3', 'M4'];
+
+function bloquesDe(categoria) {
+  return categoria.id.startsWith('mujeres') ? BLOQUES_MUJERES : BLOQUES_HOMBRES;
+}
 const INTERVALO = 4;
 
 const CATEGORIAS = [
@@ -43,7 +50,7 @@ export const ETAPAS = {
     id: 'clasificatoria',
     nombre: 'Clasificatoria',
     tipo: 'qualis',
-    boulders: ['C1', 'C2', 'C3', 'C4'],
+    boulders: [...BLOQUES_MUJERES, ...BLOQUES_HOMBRES],
     duracionTurno: 5,
     etapaPreviaId: null,
     inicio: '10:00',
@@ -52,7 +59,7 @@ export const ETAPAS = {
     id: 'final',
     nombre: 'Final',
     tipo: 'final',
-    boulders: ['M1', 'M2', 'M3', 'M4'],
+    boulders: [...BLOQUES_MUJERES, ...BLOQUES_HOMBRES],
     duracionTurno: INTERVALO,
     etapaPreviaId: 'clasificatoria',
     inicio: '15:00',
@@ -112,7 +119,7 @@ export function generarDemo() {
   CATEGORIAS.forEach((categoria, indiceCategoria) => {
     const lista = competidores.filter((item) => item.categoriaId === categoria.id);
     const inicioCategoria = sumarMinutos(clasificatoria.inicio, indiceCategoria * 60);
-    clasificatoria.boulders.forEach((boulderId, indiceBloque) => {
+    bloquesDe(categoria).forEach((boulderId, indiceBloque) => {
       const dificultad = 0.15 + (azar() * 0.5);
       lista.forEach((competidor, index) => {
         turnos.push(turno(clasificatoria, categoria.id, boulderId, competidor.id, index,
@@ -136,14 +143,15 @@ export function generarDemo() {
     const orden = ordenDeSalida(grupo.filas, CUPOS_FINAL).slice(-CUPOS_FINAL);
     const enCurso = categoria.id === CATEGORIA_EN_CURSO;
     const inicioCategoria = sumarMinutos(final.inicio, indiceCategoria * 45);
-    final.boulders.forEach((boulderId, indiceBloque) => {
+    const bloques = bloquesDe(categoria);
+    bloques.forEach((boulderId, indiceBloque) => {
       const dificultad = 0.3 + (azar() * 0.45);
       orden.forEach((fila, index) => {
         turnos.push(turno(final, categoria.id, boulderId, fila.id, index,
           sumarMinutos(inicioCategoria, (index + indiceBloque) * INTERVALO)));
         // En la categoría en curso, la competidora `index` ya terminó los bloques
         // anteriores a `4 - index` y está escalando el siguiente.
-        const bloquesTerminados = enCurso ? final.boulders.length - index : final.boulders.length;
+        const bloquesTerminados = enCurso ? bloques.length - index : bloques.length;
         if (indiceBloque < bloquesTerminados) {
           const maxIntentos = 2 + Math.floor(azar() * 4);
           resultados.push({

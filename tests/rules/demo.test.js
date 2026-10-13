@@ -38,7 +38,7 @@ describe('competencia demo', () => {
     const juez = usuario('pdaire+juez1@gmail.com');
     // La última en salir de Mujeres Adultas todavía no tiene resultados en la final.
     const pendientes = generarDemo().turnos.filter((t) => t.etapaId === 'final' && t.categoriaId === 'mujeres-adultas' && t.orden === 6);
-    const enCurso = { competenciaId: DEMO_ID, etapaId: 'final', competidorId: pendientes[0].competidorId, boulderId: 'M1' };
+    const enCurso = { competenciaId: DEMO_ID, etapaId: 'final', competidorId: pendientes[0].competidorId, boulderId: 'W1' };
     await permitido(guardarResultado(juez, enCurso, { intentos: 1, zonaEnIntento: null, topEnIntento: null, version: 1 }, 'intento', 'pdaire+juez1@gmail.com'));
     const cerrada = generarDemo().turnos.find((t) => t.etapaId === 'final' && t.categoriaId === 'hombres-adultos' && t.boulderId === 'M1');
     const claveCerrada = { competenciaId: DEMO_ID, etapaId: 'final', competidorId: cerrada.competidorId, boulderId: 'M1' };
@@ -48,10 +48,10 @@ describe('competencia demo', () => {
   it('se puede recargar: reinicia lo anotado durante la demo', async () => {
     await cargarDemo(usuario(ADMIN), ADMIN, []);
     const pendiente = generarDemo().turnos.find((t) => t.etapaId === 'final' && t.categoriaId === 'mujeres-adultas' && t.orden === 6);
-    const clave = { competenciaId: DEMO_ID, etapaId: 'final', competidorId: pendiente.competidorId, boulderId: 'M1' };
+    const clave = { competenciaId: DEMO_ID, etapaId: 'final', competidorId: pendiente.competidorId, boulderId: 'W1' };
     await guardarResultado(usuario(ADMIN), clave, { intentos: 1, zonaEnIntento: 1, topEnIntento: 1, version: 1 }, 'top', ADMIN);
     await permitido(cargarDemo(usuario(ADMIN), ADMIN, []));
-    const anotado = (await resultadosDemo()).find((r) => r.competidorId === pendiente.competidorId && r.boulderId === 'M1' && r.etapaId === 'final');
+    const anotado = (await resultadosDemo()).find((r) => r.competidorId === pendiente.competidorId && r.boulderId === 'W1' && r.etapaId === 'final');
     expect(anotado).toMatchObject({ intentos: 0, topEnIntento: null, version: 2 });
   });
 

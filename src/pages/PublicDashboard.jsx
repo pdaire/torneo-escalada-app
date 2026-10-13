@@ -2,11 +2,13 @@ import { useEffect } from 'react';
 import { formatearPuntos } from '../utils/score';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
 import { useRankingEtapa } from '../hooks/useResultados';
+import { bloquesDeCategoria } from '../utils/ranking';
 
-function bloquesVisibles(grupos, preferidos = []) {
-  const presentes = new Set(grupos.flatMap((g) => g.filas.flatMap((fila) => Object.keys(fila.boulders))));
-  const resto = [...presentes].filter((boulder) => !preferidos.includes(boulder));
-  return [...preferidos, ...resto];
+// Columnas de una categoría: sus bloques en la etapa, más cualquiera con resultados.
+function bloquesVisibles(grupo, etapa, turnos) {
+  const propios = bloquesDeCategoria(etapa, turnos, grupo.categoriaId);
+  const conResultado = new Set(grupo.filas.flatMap((fila) => Object.keys(fila.boulders)));
+  return [...propios, ...[...conResultado].filter((id) => !propios.includes(id))];
 }
 
 function EstadoCategoria({ finalizada }) {
@@ -57,7 +59,6 @@ export default function PublicDashboard() {
     return () => document.body.classList.remove('public-board');
   }, []);
 
-  const bloques = bloquesVisibles(grupos, etapa?.boulders || []);
   const titulo = etapa ? `Resultados ${etapa.nombre}` : 'Resultados';
   const variasCategorias = grupos.length > 1;
 
@@ -75,7 +76,9 @@ export default function PublicDashboard() {
         </p>
       )}
 
-      {grupos.map((grupo) => (
+      {grupos.map((grupo) => {
+        const bloques = bloquesVisibles(grupo, etapa, turnos);
+        return (
         <section key={grupo.categoriaId} style={{ maxWidth: '1100px', margin: '0 auto 2.5rem' }}>
           {variasCategorias && (
             <h2 style={{ margin: '0 0 0.75rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -116,7 +119,8 @@ export default function PublicDashboard() {
             </table>
           </div>
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 }

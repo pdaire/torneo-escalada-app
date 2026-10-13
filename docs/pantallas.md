@@ -42,7 +42,7 @@ Solo para cuentas que están en `admins`.
 2. Marcar una competencia como activa. Solo una queda activa.
 3. Agregar etapas (qualis, semifinal, final), sus bloques, la duración del turno y, si corresponde, la etapa previa. Marcar una como activa. **Cerrar** bloquea los resultados de la etapa. En una etapa abierta, cada categoría se puede **finalizar** por separado.
 4. Cargar competidores uno a uno o con CSV `dorsal,nombre,categoria`. Una competidora con resultados no se puede quitar.
-5. Generar el orden de paso por etapa, categoría y bloque (o todos los bloques). Con una etapa previa, se puede generar con sus primeras N clasificadas, en orden inverso al ranking. Reordenarlo con Subir y Bajar.
+5. Generar el orden de paso por etapa, categoría y bloques marcados. Con una etapa previa, se puede generar con sus primeras N clasificadas, en orden inverso al ranking. Reordenarlo con Subir y Bajar.
 6. Agregar jueces, juez jefe y delegados por correo. Asignar a cada juez uno o más bloques por etapa.
 
 ### Competencia demo
@@ -50,9 +50,10 @@ Solo para cuentas que están en `admins`.
 **Cargar o reiniciar competencia demo** crea la competencia `demo` y la deja activa, así que el tablero público pasa a mostrarla. Para volver a la competencia real, actívala de nuevo.
 
 - Seis categorías (Mujeres y Hombres Sub 15, Sub 17 y Adultos), ocho competidoras cada una.
-- Clasificatoria cerrada con cuatro bloques (C1–C4).
+- Las mujeres escalan W1–W4 y los hombres M1–M4 (Women y Men), en la clasificatoria y en la final.
+- Clasificatoria cerrada.
 - Final con las seis primeras de cada categoría, desempate por clasificatoria. Todas las categorías están finalizadas salvo Mujeres Adultas, que está a medias: cada finalista va en un bloque distinto y la última todavía no parte.
-- `pdaire+juez1@gmail.com` es juez de M1–M4 en la final. `pdaire+delegado1@gmail.com` es delegado de "Club Demo". Quien carga la demo queda como juez jefe.
+- `pdaire+juez1@gmail.com` es juez de los ocho bloques de la final. `pdaire+delegado1@gmail.com` es delegado de "Club Demo". Quien carga la demo queda como juez jefe.
 
 Volver a cargarla la reinicia: los resultados anotados durante una demo vuelven a su valor inicial. Las apelaciones presentadas no se borran.
 

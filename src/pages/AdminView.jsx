@@ -252,11 +252,12 @@ export default function AdminView() {
     const datos = new FormData(evento.currentTarget);
     const etapa = etapas.find((item) => item.id === datos.get('etapaId'));
     const categoriaId = datos.get('categoriaId');
-    const boulderIds = datos.get('boulderId') === '*' ? etapa.boulders : [datos.get('boulderId')];
+    const boulderIds = datos.getAll('boulderIds');
     const horaInicio = datos.get('hora');
     const intervalo = Number(datos.get('intervalo')) || 4;
     const cupos = Number(datos.get('cupos')) || 0;
     ejecutar(async () => {
+      if (!boulderIds.length) throw new Error('Marca al menos un bloque.');
       const lista = origenOrden === 'previa'
         ? await clasificadasDeEtapaPrevia(etapa, categoriaId, cupos)
         : competidores.filter((item) => item.categoriaId === categoriaId);
@@ -266,7 +267,7 @@ export default function AdminView() {
         turnos
           .filter((item) => item.etapaId === etapa.id && item.boulderId === boulderId && item.categoriaId === categoriaId)
           .forEach((item) => batch.delete(doc(turnosCol(db, competenciaId), item.id)));
-        // Con todos los bloques, cada bloque arranca un turno después del anterior.
+        // Con varios bloques, cada bloque arranca un turno después del anterior.
         const inicio = sumarMinutos(horaInicio, indiceBloque * intervalo);
         lista.forEach((competidor, index) => {
           batch.set(doc(turnosCol(db, competenciaId)), {
@@ -472,7 +473,7 @@ export default function AdminView() {
                 <option value="semi">Semifinal</option>
                 <option value="final">Final</option>
               </select>
-              <input name="boulders" defaultValue="M1, M2, M3, M4" />
+              <input name="boulders" defaultValue="W1, W2, W3, W4, M1, M2, M3, M4" title="Bloques de la etapa. Cada categoría usa los que tengan turnos para ella." />
               <input name="duracion" type="number" min="1" defaultValue="4" className="admin-field-narrow" />
               <select name="etapaPreviaId" defaultValue="" title="Desempata con la posición en esa etapa y permite generar el orden con sus clasificadas">
                 <option value="">Sin etapa previa</option>
@@ -539,10 +540,11 @@ export default function AdminView() {
                 <select name="categoriaId" required>
                   {categorias.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
                 </select>
-                <select name="boulderId" required>
-                  <option value="*">Todos los bloques</option>
-                  {(etapaOrden?.boulders || []).map((id) => <option key={id} value={id}>{id}</option>)}
-                </select>
+                <span key={etapaOrden?.id} className="admin-row">
+                  {(etapaOrden?.boulders || []).map((id) => (
+                    <label key={id}><input type="checkbox" name="boulderIds" value={id} /> {id}</label>
+                  ))}
+                </span>
                 <select value={origenOrden} onChange={(evento) => setOrigenOrden(evento.target.value)}>
                   <option value="categoria">Toda la categoría</option>
                   {etapaOrden?.etapaPreviaId && (

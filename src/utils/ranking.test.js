@@ -81,3 +81,24 @@ describe('ordenDeSalida', () => {
     expect(ordenDeSalida(filas, 2).map((f) => f.id)).toEqual(['c', 'b', 'a']);
   });
 });
+
+describe('bloquesDeCategoria', () => {
+  const etapa = { id: 'final', boulders: ['W1', 'W2', 'M1', 'M2'] };
+  const turnos = [
+    { etapaId: 'final', categoriaId: 'damas', boulderId: 'W2' },
+    { etapaId: 'final', categoriaId: 'damas', boulderId: 'W1' },
+    { etapaId: 'final', categoriaId: 'varones', boulderId: 'M1' },
+    { etapaId: 'qualis', categoriaId: 'damas', boulderId: 'M2' },
+  ];
+
+  it('devuelve los bloques con turnos de la categoría, en el orden de la etapa', async () => {
+    const { bloquesDeCategoria } = await import('./ranking');
+    expect(bloquesDeCategoria(etapa, turnos, 'damas')).toEqual(['W1', 'W2']);
+    expect(bloquesDeCategoria(etapa, turnos, 'varones')).toEqual(['M1']);
+  });
+
+  it('sin turnos, devuelve todos los de la etapa', async () => {
+    const { bloquesDeCategoria } = await import('./ranking');
+    expect(bloquesDeCategoria(etapa, turnos, 'otra')).toEqual(etapa.boulders);
+  });
+});

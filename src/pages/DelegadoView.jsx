@@ -7,6 +7,7 @@ import { useEtapaActiva } from '../hooks/useEtapaActiva';
 import { useResultadosEtapa } from '../hooks/useResultados';
 import { useMiembro, useUsuario } from '../hooks/useSesion';
 import { apelacionesCol } from '../utils/competicion';
+import { bloquesDeCategoria } from '../utils/ranking';
 import './delegado.css';
 
 const ESTADOS = {
@@ -67,10 +68,10 @@ export default function DelegadoView() {
   const participantes = idsEnEtapa.size
     ? competidores.filter((item) => idsEnEtapa.has(item.id))
     : competidores;
-  const boulders = useMemo(() => etapa?.boulders || [], [etapa]);
   const competidorIdActivo = competidorId || participantes[0]?.id || '';
-  const boulderIdActivo = boulderId || boulders[0] || '';
   const competidorSeleccionado = participantes.find((item) => item.id === competidorIdActivo);
+  const boulders = bloquesDeCategoria(etapa, turnos, competidorSeleccionado?.categoriaId);
+  const boulderIdActivo = boulders.includes(boulderId) ? boulderId : (boulders[0] || '');
   const resultadoActual = resultados.find((item) => (
     item.competidorId === competidorIdActivo && item.boulderId === boulderIdActivo
   ));

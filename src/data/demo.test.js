@@ -37,6 +37,12 @@ describe('generarDemo', () => {
     grupos.forEach((g) => expect(g.filas).toHaveLength(6));
   });
 
+  it('las mujeres escalan W1–W4 y los hombres M1–M4', () => {
+    demo.turnos.forEach((t) => {
+      expect(t.boulderId[0]).toBe(t.categoriaId.startsWith('mujeres') ? 'W' : 'M');
+    });
+  });
+
   it('es determinística', () => {
     expect(generarDemo()).toEqual(demo);
   });

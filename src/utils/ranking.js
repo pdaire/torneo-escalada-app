@@ -83,3 +83,14 @@ export function posicionesDeRanking(grupos) {
 export function ordenDeSalida(filas, cupos) {
   return filas.filter((fila) => fila.posicion <= cupos).reverse();
 }
+
+// Bloques que usa una categoría en la etapa: los que tienen turnos para ella,
+// en el orden de la etapa. Sin turnos, todos los de la etapa.
+export function bloquesDeCategoria(etapa, turnos, categoriaId) {
+  const todos = etapa?.boulders || [];
+  const usados = new Set(turnos
+    .filter((t) => t.etapaId === etapa?.id && t.categoriaId === categoriaId)
+    .map((t) => t.boulderId));
+  if (!usados.size) return todos;
+  return [...todos.filter((id) => usados.has(id)), ...[...usados].filter((id) => !todos.includes(id))];
+}
