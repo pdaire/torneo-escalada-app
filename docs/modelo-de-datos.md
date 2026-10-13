@@ -1,18 +1,24 @@
 # Modelo de datos
 
-Competidores, etapas y turnos viven dentro de cada competencia. Los resultados están en una colección aparte para que la misma persona pueda tener un marcador distinto en qualis y en la final.
+Competidores, etapas, turnos, miembros y apelaciones viven dentro de cada competencia. Los resultados están en una colección aparte para que la misma persona pueda tener un marcador distinto en qualis y en la final.
 
 ```mermaid
 erDiagram
+    ADMIN {
+        string id PK "admins/{correo}"
+    }
     COMPETENCIA ||--o{ ETAPA : "etapas"
     COMPETENCIA ||--o{ COMPETIDOR : "competidores"
     COMPETENCIA ||--o{ TURNO : "turnos"
+    COMPETENCIA ||--o{ MIEMBRO : "miembros"
+    COMPETENCIA ||--o{ APELACION : "apelaciones"
     ETAPA ||--o{ TURNO : "etapaId"
+    ETAPA o|--o{ ETAPA : "etapaPreviaId"
     COMPETIDOR ||--o{ TURNO : "competidorId"
     COMPETENCIA ||--o{ RESULTADO : "competenciaId"
     ETAPA ||--o{ RESULTADO : "etapaId"
     COMPETIDOR ||--o{ RESULTADO : "competidorId"
-    COMPETENCIA ||--o{ APELACION : "competenciaId"
+    RESULTADO ||--o{ HISTORIAL : "historial"
     ETAPA ||--o{ APELACION : "etapaId"
     COMPETIDOR o|--o{ APELACION : "competidorId opcional"
 
@@ -31,7 +37,16 @@ erDiagram
         string_array boulders "M1, M2, M3, M4"
         number duracionTurno "minutos"
         boolean activa "una sola activa por competencia"
-        map asignaciones "correo del juez a boulder"
+        string estado "abierta | cerrada"
+        string etapaPreviaId "opcional: desempate y clasificadas"
+    }
+
+    MIEMBRO {
+        string id PK "competencias/{id}/miembros/{correo}"
+        string rol "juez | juez_jefe | delegado"
+        string nombre
+        string club "delegados"
+        map asignaciones "etapaId a lista de bloques (jueces)"
     }
 
     COMPETIDOR {
@@ -58,39 +73,61 @@ erDiagram
         string etapaId FK
         string competidorId FK
         string boulderId
-        string nombre "copia"
-        string dorsal "copia"
-        string categoria "copia"
-        string categoriaId "copia"
         number intentos
         number zonaEnIntento "null si no hubo zona"
         number topEnIntento "null si no hubo top"
-        string actualizadoPor
+        number version "sube de a uno"
+        string actualizadoPor "correo"
         timestamp actualizadoEn
     }
 
+    HISTORIAL {
+        string id PK "resultados/{id}/historial/v{version}"
+        number version
+        string accion "intento | zona | top | edicion"
+        number intentos
+        number zonaEnIntento
+        number topEnIntento
+        string autor "correo"
+        timestamp en
+    }
+
     APELACION {
-        string id PK "apelaciones/{id}"
+        string id PK "competencias/{id}/apelaciones/{id}"
         string tipo "resultado | general"
         string estado "borrador | en_evaluacion | aceptada | rechazada"
-        string competenciaId FK
         string etapaId FK
+        string etapaNombre
         string autorUid
         string autorEmail
         string argumento
         timestamp creadaEn
         string competidorId FK "solo resultado"
+        string competidorNombre "solo resultado"
         string dorsal "solo resultado"
         string boulderId "solo resultado"
         map resultadoActual "copia al presentar, solo resultado"
-        string resueltaPor "correo del juez"
+        string resueltaPor "correo del juez jefe"
         timestamp resueltaEn
     }
 ```
 
+## Roles
+
+| Rol | Dónde | Qué puede hacer |
+| --- | --- | --- |
+| Admin | `admins/{correo}` | Configurar cualquier competencia: etapas, competidoras, turnos y miembros. Se crea a mano en la consola. |
+| Juez | `miembros/{correo}` con `rol: juez` | Anotar en los bloques que tiene asignados en cada etapa. Leer apelaciones. |
+| Juez jefe | `miembros/{correo}` con `rol: juez_jefe` | Anotar en todos los bloques y resolver apelaciones. |
+| Delegado | `miembros/{correo}` con `rol: delegado` | Presentar apelaciones y ver solo las suyas. |
+
+El rol es por competencia: el mismo correo puede ser juez en una fecha y delegado en otra. El id del miembro es el correo en minúsculas, porque las reglas lo comparan con el correo del token de Firebase Auth.
+
+Ser admin no da permiso para anotar: un admin que también juzga tiene que agregarse como miembro.
+
 ## Resultado
 
-Hay un documento por competidora, bloque y etapa. Guarda el estado actual, no un registro por cada toque.
+Hay un documento por competidora, bloque y etapa. Guarda el estado actual. Cada cambio deja además una entrada en `historial`, en el mismo batch.
 
 El id se arma así:
 
@@ -98,35 +135,48 @@ El id se arma así:
 {competenciaId}__{etapaId}__{competidorId}__{boulderId}
 ```
 
-Ejemplo: `baguales-2026__final__abs_damas_4__M1`.
-
-Nombre, dorsal y categoría se copian en el resultado para que el tablero no tenga que leer la subcolección de competidores al pintar cada celda.
+Ejemplo: `baguales-2026__final__abs_damas_4__M1`. Las reglas verifican que el id coincida con los campos.
 
 `zonaEnIntento` y `topEnIntento` son el número de intento en que se consiguieron. `null` significa que todavía no hay zona o top. Un top sin zona previa deja la zona en el mismo intento.
 
-Los puntos no se guardan. Se calculan al mostrar el tablero a partir de `topEnIntento` y `zonaEnIntento`, así que una corrección del juez o un cambio de fórmula no deja puntajes desactualizados en Firestore. Ver [Puntuación](puntuacion.md).
+Los puntos no se guardan. Se calculan al mostrar el tablero a partir de `topEnIntento` y `zonaEnIntento`, así que una corrección del juez o un cambio de fórmula no deja puntajes desactualizados. Ver [Puntuación](puntuacion.md).
+
+Nombre, dorsal y categoría no se copian en el resultado: el tablero los toma de `competidores`, que ya tiene cargados. Así una corrección del nombre se ve de inmediato.
+
+### Versión y escrituras offline
+
+Cada escritura tiene que traer `version` = versión anterior + 1. Una tablet que anotó sin red y vuelve horas después con una versión atrasada recibe un rechazo, en lugar de pisar una corrección hecha desde otro dispositivo. La tablet muestra el aviso y vuelve al valor vigente.
+
+Los resultados anteriores a este cambio no tienen `version`. Se leen como versión 0.
+
+## Etapas
+
+`estado: cerrada` bloquea toda escritura de resultados en la etapa. El admin la cierra al terminar y la puede reabrir.
+
+`etapaPreviaId` encadena rondas: desempata el ranking con la posición en la etapa previa y permite generar el orden de paso con sus clasificadas.
 
 ## Apelaciones
 
-`apelaciones` es una colección separada de `resultados`. Una apelación nunca cambia automáticamente el marcador.
+Viven dentro de la competencia. Una apelación nunca cambia el marcador.
 
-Una apelación particular guarda la competidora, el bloque y una copia del resultado que existía al presentarla. La corrección pedida va solo en el argumento. Una apelación general guarda el contexto de competencia y etapa, pero no una competidora.
+Una apelación particular guarda la competidora, el bloque y una copia del resultado que existía al presentarla. La corrección pedida va solo en el argumento. Una apelación general no guarda una competidora.
 
-Los estados son `borrador`, `en_evaluacion`, `aceptada` y `rechazada`. El delegado crea el borrador y lo envía a evaluación. Un juez autenticado acepta o rechaza desde la tablet. Aceptar no modifica el resultado: el juez corrige el marcador aparte si corresponde.
+El delegado crea el borrador y lo envía a evaluación. El juez jefe la acepta o la rechaza desde la tablet. Aceptar no modifica el resultado: el juez jefe lo corrige aparte con Editar.
 
 ## Lo que no es una colección
 
 Los bloques no tienen colección. Son la lista `boulders` de la etapa.
 
-La colección `intentos` queda en Firestore por las reglas viejas. La app ya no la lee ni escribe ahí.
+`intentos` y `apelaciones` en la raíz son colecciones viejas. Las reglas ya no permiten leerlas ni escribirlas.
 
 ## Reglas
 
-El archivo del repo es `firestore.rules`.
+El archivo es `firestore.rules` y los tests están en `tests/rules/`.
 
-- El público puede leer competencias, configuración y resultados.
-- Solo usuarios autenticados pueden leer apelaciones.
-- Solo un usuario con sesión iniciada puede escribir competencias, sus subcolecciones y `resultados`.
-- El autor puede crear una apelación en `borrador` o `en_evaluacion`, y editarla mientras sigue en borrador.
-- Un usuario autenticado puede pasar una apelación de `en_evaluacion` a `aceptada` o `rechazada`. No se pueden borrar.
-- Todavía no hay un rol de administrador: cualquier juez autenticado puede editar la configuración.
+- El público lee competencias, etapas, competidoras, turnos y resultados.
+- Solo un admin escribe la configuración de una competencia.
+- Un juez escribe resultados solo en sus bloques asignados, con un marcador válido y en una etapa abierta. El juez jefe, en cualquier bloque.
+- El historial es solo-agregar y lo leen los jueces de la competencia.
+- Un delegado crea apelaciones con su propio correo, edita sus borradores y lee solo las suyas.
+- Solo el juez jefe resuelve una apelación, y nunca una propia.
+- Nadie borra apelaciones ni historial.

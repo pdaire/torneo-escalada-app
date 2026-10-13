@@ -1,64 +1,212 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /competencias/{competenciaId} {
-      allow read: if true;
-      allow write: if request.auth != null;
 
-      match /etapas/{etapaId} {
-        allow read: if true;
-        allow write: if request.auth != null;
-      }
+    // ---- Sesión y roles ----
 
-      match /competidores/{competidorId} {
-        allow read: if true;
-        allow write: if request.auth != null;
-      }
+    function autenticado() {
+      return request.auth != null && request.auth.token.email is string;
+    }
 
-      match /turnos/{turnoId} {
-        allow read: if true;
-        allow write: if request.auth != null;
-      }
+    function correo() {
+      return request.auth.token.email.lower();
+    }
+
+    function esAdmin() {
+      return autenticado() && exists(/databases/$(database)/documents/admins/$(correo()));
+    }
+
+    function rutaMiembro(c) {
+      return /databases/$(database)/documents/competencias/$(c)/miembros/$(correo());
+    }
+
+    function esMiembro(c) {
+      return autenticado() && exists(rutaMiembro(c));
+    }
+
+    function rol(c) {
+      return get(rutaMiembro(c)).data.rol;
+    }
+
+    function esJuez(c) {
+      return esMiembro(c) && rol(c) in ['juez', 'juez_jefe'];
+    }
+
+    function esJuezJefe(c) {
+      return esMiembro(c) && rol(c) == 'juez_jefe';
+    }
+
+    function esDelegado(c) {
+      return esMiembro(c) && rol(c) == 'delegado';
+    }
+
+    function rutaEtapa(c, e) {
+      return /databases/$(database)/documents/competencias/$(c)/etapas/$(e);
+    }
+
+    function etapaAbierta(c, e) {
+      return exists(rutaEtapa(c, e)) && get(rutaEtapa(c, e)).data.get('estado', 'abierta') == 'abierta';
+    }
+
+    // El juez jefe anota en cualquier bloque. Un juez solo en los asignados para esa etapa.
+    function puedeAnotar(c, e, b) {
+      return esJuezJefe(c)
+        || (esJuez(c) && b in get(rutaMiembro(c)).data.get('asignaciones', {}).get(e, []));
+    }
+
+    // ---- Resultados ----
+
+    function intentoValido(valor, total) {
+      return valor == null || (valor is int && valor >= 1 && valor <= total);
+    }
+
+    function marcadorValido(d) {
+      return d.intentos is int && d.intentos >= 0 && d.intentos <= 999
+        && intentoValido(d.zonaEnIntento, d.intentos)
+        && intentoValido(d.topEnIntento, d.intentos)
+        && (d.topEnIntento == null || (d.zonaEnIntento != null && d.zonaEnIntento <= d.topEnIntento));
+    }
+
+    function escrituraResultado(id, d) {
+      let campos = ['competenciaId', 'etapaId', 'competidorId', 'boulderId',
+        'intentos', 'zonaEnIntento', 'topEnIntento', 'version', 'actualizadoPor', 'actualizadoEn'];
+      return d.keys().hasAll(campos) && d.keys().hasOnly(campos)
+        && d.competenciaId is string && d.etapaId is string
+        && d.competidorId is string && d.boulderId is string
+        && id == d.competenciaId + '__' + d.etapaId + '__' + d.competidorId + '__' + d.boulderId
+        && marcadorValido(d)
+        && d.version is int
+        && d.actualizadoPor == correo()
+        && d.actualizadoEn == request.time
+        && etapaAbierta(d.competenciaId, d.etapaId)
+        && d.boulderId in get(rutaEtapa(d.competenciaId, d.etapaId)).data.boulders
+        && exists(/databases/$(database)/documents/competencias/$(d.competenciaId)/competidores/$(d.competidorId))
+        && puedeAnotar(d.competenciaId, d.etapaId, d.boulderId);
     }
 
     match /resultados/{resultadoId} {
       allow read: if true;
-      allow write: if request.auth != null;
+
+      // `version` sube de a uno: una escritura basada en un estado viejo
+      // (por ejemplo, una tablet que estuvo offline) se rechaza.
+      allow create: if autenticado()
+        && escrituraResultado(resultadoId, request.resource.data)
+        && request.resource.data.version == 1;
+
+      allow update: if autenticado()
+        && escrituraResultado(resultadoId, request.resource.data)
+        && request.resource.data.version == resource.data.get('version', 0) + 1;
+
+      allow delete: if esAdmin();
+
+      // Registro solo-agregar de cada cambio. Se escribe en el mismo batch que el resultado.
+      match /historial/{entradaId} {
+        allow read: if esAdmin() || esJuez(resultadoId.split('__')[0]);
+
+        allow create: if esJuez(resultadoId.split('__')[0])
+          && request.resource.data.keys().hasOnly(['version', 'accion', 'intentos', 'zonaEnIntento', 'topEnIntento', 'autor', 'en'])
+          && request.resource.data.version is int
+          && entradaId == 'v' + string(request.resource.data.version)
+          && request.resource.data.accion in ['intento', 'zona', 'top', 'edicion']
+          && request.resource.data.autor == correo()
+          && request.resource.data.en == request.time
+          && getAfter(/databases/$(database)/documents/resultados/$(resultadoId)).data.version == request.resource.data.version
+          && getAfter(/databases/$(database)/documents/resultados/$(resultadoId)).data.intentos == request.resource.data.intentos
+          && getAfter(/databases/$(database)/documents/resultados/$(resultadoId)).data.zonaEnIntento == request.resource.data.zonaEnIntento
+          && getAfter(/databases/$(database)/documents/resultados/$(resultadoId)).data.topEnIntento == request.resource.data.topEnIntento;
+
+        allow update, delete: if false;
+      }
     }
 
-    match /intentos/{intentoId} {
+    // ---- Administradores globales (se crean a mano en la consola) ----
+
+    match /admins/{adminId} {
+      allow read: if autenticado() && adminId == correo();
+      allow write: if false;
+    }
+
+    // ---- Competencias ----
+
+    match /competencias/{c} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if esAdmin();
+
+      match /etapas/{etapaId} {
+        allow read: if true;
+        allow write: if esAdmin()
+          && request.resource.data.get('estado', 'abierta') in ['abierta', 'cerrada'];
+        allow delete: if esAdmin();
+      }
+
+      match /competidores/{competidorId} {
+        allow read: if true;
+        allow write: if esAdmin();
+      }
+
+      match /turnos/{turnoId} {
+        allow read: if true;
+        allow write: if esAdmin();
+      }
+
+      // Id = correo en minúsculas. El mismo correo puede tener otro rol en otra competencia.
+      match /miembros/{miembroId} {
+        allow read: if esAdmin() || (autenticado() && miembroId == correo());
+        allow create, update: if esAdmin()
+          && miembroId == miembroId.lower()
+          && request.resource.data.keys().hasOnly(['rol', 'nombre', 'club', 'asignaciones'])
+          && request.resource.data.rol in ['juez', 'juez_jefe', 'delegado']
+          && request.resource.data.get('asignaciones', {}) is map;
+        allow delete: if esAdmin();
+      }
+
+      match /apelaciones/{apelacionId} {
+        function apelacionValida(d) {
+          return d.keys().hasOnly(['tipo', 'estado', 'argumento', 'etapaId', 'etapaNombre',
+              'competidorId', 'competidorNombre', 'dorsal', 'boulderId', 'resultadoActual',
+              'autorUid', 'autorEmail', 'creadaEn'])
+            && d.tipo in ['resultado', 'general']
+            && d.estado in ['borrador', 'en_evaluacion']
+            && d.argumento is string
+            && d.argumento.size() >= 10
+            && d.argumento.size() <= 500
+            && d.etapaId is string
+            && (d.tipo == 'general' || (d.competidorId is string && d.boulderId is string));
+        }
+
+        allow read: if autenticado()
+          && (resource.data.autorUid == request.auth.uid || esJuez(c) || esAdmin());
+
+        allow create: if esDelegado(c)
+          && apelacionValida(request.resource.data)
+          && request.resource.data.autorUid == request.auth.uid
+          && request.resource.data.autorEmail == correo()
+          && request.resource.data.creadaEn == request.time
+          && exists(rutaEtapa(c, request.resource.data.etapaId));
+
+        allow update: if (
+            // El delegado autor edita su borrador o lo envía a evaluación.
+            esDelegado(c)
+            && resource.data.autorUid == request.auth.uid
+            && resource.data.estado == 'borrador'
+            && apelacionValida(request.resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tipo', 'estado', 'argumento',
+              'competidorId', 'competidorNombre', 'dorsal', 'boulderId', 'resultadoActual'])
+          ) || (
+            // Solo el juez jefe resuelve, y nunca una apelación propia.
+            esJuezJefe(c)
+            && resource.data.autorUid != request.auth.uid
+            && resource.data.estado == 'en_evaluacion'
+            && request.resource.data.estado in ['aceptada', 'rechazada']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'resueltaPor', 'resueltaEn'])
+            && request.resource.data.resueltaPor == correo()
+            && request.resource.data.resueltaEn == request.time
+          );
+
+        allow delete: if false;
+      }
     }
 
-    match /apelaciones/{apelacionId} {
-      allow read: if request.auth != null;
-
-      allow create: if request.auth != null
-        && request.resource.data.autorUid == request.auth.uid
-        && request.resource.data.estado in ['borrador', 'en_evaluacion']
-        && request.resource.data.argumento is string
-        && request.resource.data.argumento.size() >= 10
-        && request.resource.data.argumento.size() <= 500;
-
-      allow update: if request.auth != null && (
-        (
-          resource.data.autorUid == request.auth.uid
-          && resource.data.estado == 'borrador'
-          && request.resource.data.autorUid == resource.data.autorUid
-          && request.resource.data.estado in ['borrador', 'en_evaluacion']
-          && request.resource.data.argumento is string
-          && request.resource.data.argumento.size() >= 10
-          && request.resource.data.argumento.size() <= 500
-        )
-        || (
-          resource.data.estado == 'en_evaluacion'
-          && request.resource.data.estado in ['aceptada', 'rechazada']
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'resueltaPor', 'resueltaEn'])
-        )
-      );
-
-      allow delete: if false;
-    }
+    // `apelaciones` e `intentos` en la raíz son colecciones viejas: sin regla, todo se deniega.
   }
 }

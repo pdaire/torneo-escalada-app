@@ -1,6 +1,6 @@
 # Puntuación
 
-Se usa el sistema de puntos de búlder de la IFSC (2025). La fórmula está en `src/utils/score.js`. La validación y el documento de resultado están en `src/utils/resultado.js`.
+Se usa el sistema de puntos de búlder de la IFSC (2025). La fórmula está en `src/utils/score.js`, el ranking en `src/utils/ranking.js` y la validación en `src/utils/resultado.js`. Los tres tienen tests.
 
 ## Puntos por bloque
 
@@ -18,7 +18,9 @@ Top y zona no se suman: si hay top, el bloque vale los puntos del top. Los inten
 
 Se suman los puntos de cada bloque de la etapa. En una ronda de cuatro bloques, el máximo es 100.0.
 
-Las competidoras se ordenan de mayor a menor puntaje. Si dos tienen el mismo puntaje, comparten posición.
+Cada categoría tiene su propio ranking. Las competidoras se ordenan de mayor a menor puntaje.
+
+Si dos tienen el mismo puntaje y la etapa tiene una etapa previa, gana la que quedó mejor en esa etapa (countback). Si siguen empatadas, comparten posición. El desempate mira solo una etapa hacia atrás.
 
 Los puntos se calculan en décimas enteras (25.0 son 250 décimas) para que las sumas no arrastren errores de coma flotante.
 
@@ -30,6 +32,8 @@ Los puntos se calculan en décimas enteras (25.0 son 250 décimas) para que las 
 | Marcar zona | Guarda el intento actual en `zonaEnIntento`. No suma un intento extra. |
 | Marcar top | Guarda el intento actual en `topEnIntento`. Si no había zona, la zona queda en ese mismo intento. |
 | Editar | Permite corregir los tres números y valida el resultado antes de guardar. |
+
+Cada acción se guarda al instante en la tablet, también sin red, y se sincroniza al volver la conexión. Si mientras tanto otro dispositivo cambió el mismo resultado, la escritura atrasada se rechaza y la tablet vuelve al valor vigente.
 
 Zona y top se pueden marcar solo cuando ya hay al menos un intento y todavía no hay top. Después del top, + Intento queda deshabilitado.
 

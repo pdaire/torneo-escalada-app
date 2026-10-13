@@ -21,5 +21,3 @@ export function decimasBoulder({ topEnIntento, zonaEnIntento } = {}) {
 export function formatearPuntos(decimas) {
   return (decimas / 10).toFixed(1);
 }
-
-export const sortScore = (a, b) => b.decimas - a.decimas;

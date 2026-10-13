@@ -20,10 +20,30 @@ export function turnosCol(db, competenciaId) {
   return collection(db, 'competencias', competenciaId, 'turnos');
 }
 
+export function miembrosCol(db, competenciaId) {
+  return collection(db, 'competencias', competenciaId, 'miembros');
+}
+
+export function miembroRef(db, competenciaId, correo) {
+  return doc(db, 'competencias', competenciaId, 'miembros', normalizarCorreo(correo));
+}
+
+export function apelacionesCol(db, competenciaId) {
+  return collection(db, 'competencias', competenciaId, 'apelaciones');
+}
+
+export function adminRef(db, correo) {
+  return doc(db, 'admins', normalizarCorreo(correo));
+}
+
+export function normalizarCorreo(correo) {
+  return String(correo || '').trim().toLowerCase();
+}
+
 export function slug(texto) {
   return String(texto || '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '') || 'item';

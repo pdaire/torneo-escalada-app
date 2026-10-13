@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { addDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
-import { resultadosColRef } from '../utils/resultado';
+import { useResultadosEtapa } from '../hooks/useResultados';
+import { useMiembro, useUsuario } from '../hooks/useSesion';
+import { apelacionesCol } from '../utils/competicion';
 import './delegado.css';
 
 const ESTADOS = {
@@ -24,7 +26,7 @@ function resumenResultado(resultado) {
 }
 
 export default function DelegadoView() {
-  const [user, setUser] = useState(null);
+  const { user, correo, cargando: cargandoSesion } = useUsuario();
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -35,11 +37,11 @@ export default function DelegadoView() {
   const [argumento, setArgumento] = useState('');
   const [editandoId, setEditandoId] = useState(null);
   const [enviando, setEnviando] = useState(false);
-  const [resultados, setResultados] = useState([]);
   const [apelaciones, setApelaciones] = useState([]);
   const { competencia, etapa, competidores, turnos, cargando } = useEtapaActiva();
-
-  useEffect(() => onAuthStateChanged(auth, setUser), []);
+  const { miembro, cargando: cargandoMiembro } = useMiembro(user, competencia?.id);
+  const { resultados } = useResultadosEtapa(competencia?.id, etapa?.id);
+  const esDelegado = miembro?.rol === 'delegado';
 
   useEffect(() => {
     document.body.classList.add('delegado-mode');
@@ -47,27 +49,17 @@ export default function DelegadoView() {
   }, []);
 
   useEffect(() => {
-    if (!competencia || !etapa) {
+    if (!user || !competencia || !esDelegado) {
       return undefined;
     }
-    const consulta = query(resultadosColRef(db), where('competenciaId', '==', competencia.id));
+    // La consulta filtra por autor: las reglas no dejan leer apelaciones de otros delegados.
+    const consulta = query(apelacionesCol(db, competencia.id), where('autorUid', '==', user.uid));
     return onSnapshot(consulta, (snapshot) => {
-      setResultados(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
-        .filter((item) => item.etapaId === etapa.id));
-    });
-  }, [competencia, etapa]);
-
-  useEffect(() => {
-    if (!user) {
-      return undefined;
-    }
-    return onSnapshot(collection(db, 'apelaciones'), (snapshot) => {
       setApelaciones(snapshot.docs
         .map((item) => ({ id: item.id, ...item.data() }))
-        .filter((item) => item.autorUid === user.uid)
         .sort((a, b) => (b.creadaEn?.seconds || 0) - (a.creadaEn?.seconds || 0)));
-    });
-  }, [user]);
+    }, () => setError('No se pudieron leer tus apelaciones.'));
+  }, [user?.uid, competencia?.id, esDelegado]);
 
   const idsEnEtapa = useMemo(() => new Set(
     turnos.filter((turno) => turno.etapaId === etapa?.id).map((turno) => turno.competidorId),
@@ -137,16 +129,14 @@ export default function DelegadoView() {
         ...detalle,
       };
       if (editandoId) {
-        await updateDoc(doc(db, 'apelaciones', editandoId), datos);
+        await updateDoc(doc(apelacionesCol(db, competencia.id), editandoId), datos);
       } else {
-        await addDoc(collection(db, 'apelaciones'), {
+        await addDoc(apelacionesCol(db, competencia.id), {
           ...datos,
-          competenciaId: competencia.id,
-          competenciaNombre: competencia.nombre,
           etapaId: etapa.id,
           etapaNombre: etapa.nombre,
           autorUid: user.uid,
-          autorEmail: user.email,
+          autorEmail: correo,
           creadaEn: serverTimestamp(),
         });
       }
@@ -157,7 +147,7 @@ export default function DelegadoView() {
         : 'Apelación enviada a evaluación. El resultado no cambia hasta que un juez la resuelva.');
     } catch (err) {
       setError(err.code === 'permission-denied'
-        ? 'Firestore rechazó la apelación. Publica las reglas actualizadas.'
+        ? 'Firestore rechazó la apelación. Revisa que tu cuenta sea delegado en esta competencia.'
         : 'No se pudo guardar la apelación.');
     } finally {
       setEnviando(false);
@@ -168,7 +158,7 @@ export default function DelegadoView() {
     setError('');
     setMensaje('');
     try {
-      await updateDoc(doc(db, 'apelaciones', id), { estado: 'en_evaluacion' });
+      await updateDoc(doc(apelacionesCol(db, competencia.id), id), { estado: 'en_evaluacion' });
       setMensaje('Apelación enviada a evaluación.');
     } catch {
       setError('No se pudo enviar el borrador.');
@@ -185,6 +175,10 @@ export default function DelegadoView() {
     setError('');
   };
 
+  if (cargandoSesion) {
+    return <main className="delegado delegado-login"><p>Cargando…</p></main>;
+  }
+
   if (!user) {
     return (
       <main className="delegado delegado-login">
@@ -200,11 +194,26 @@ export default function DelegadoView() {
     );
   }
 
+  if (cargando || (competencia && cargandoMiembro)) {
+    return <main className="delegado delegado-login"><p>Cargando competencia…</p></main>;
+  }
+
+  if (!esDelegado) {
+    return (
+      <main className="delegado delegado-login">
+        <h1>Tu cuenta no es delegado{competencia ? ` en ${competencia.nombre}` : ''}</h1>
+        <p>{correo}</p>
+        <p>Pide a la organización que te agregue como delegado de tu club.</p>
+        <button className="delegado-btn-secondary" onClick={() => signOut(auth)}>Salir</button>
+      </main>
+    );
+  }
+
   return (
     <main className="delegado">
       <header className="delegado-header">
         <div>
-          <p className="delegado-kicker">Delegado</p>
+          <p className="delegado-kicker">Delegado{miembro.club ? ` · ${miembro.club}` : ''}</p>
           <h1>Presentar apelación</h1>
           <p>{competencia?.nombre || (cargando ? 'Cargando…' : 'Sin competencia activa')} · {etapa?.nombre || 'Sin etapa activa'}</p>
         </div>

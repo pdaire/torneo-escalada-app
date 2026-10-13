@@ -1,22 +1,34 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import {
+  guardarResultado,
+  idResultado,
   leerResultado,
   prepararResultado,
   resultadoDocRef,
   resultadoVacio,
   validarResultado,
 } from '../utils/resultado';
+import { apelacionesCol } from '../utils/competicion';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
+import { useMiembro, useUsuario } from '../hooks/useSesion';
 
 function leerPreferencia(clave, valorInicial) {
   try {
     return localStorage.getItem(clave) || valorInicial;
   } catch {
     return valorInicial;
+  }
+}
+
+function guardarPreferencia(clave, valor) {
+  try {
+    localStorage.setItem(clave, valor);
+  } catch {
+    // Sin almacenamiento local: la preferencia dura solo esta sesión.
   }
 }
 
@@ -30,13 +42,23 @@ const botonBase = {
   minWidth: 0,
 };
 
+const pantallaSimple = { padding: '2rem', fontFamily: 'sans-serif', textAlign: 'center', color: '#111', backgroundColor: '#fff', minHeight: '100svh', boxSizing: 'border-box' };
+
+function mensajeErrorEscritura(error) {
+  if (error?.code === 'permission-denied') {
+    return 'No se guardó: otro dispositivo cambió este resultado, la etapa está cerrada o no tienes este bloque asignado. Se muestra el valor vigente.';
+  }
+  return 'Error al guardar. Revisa tu conexión.';
+}
+
 export default function JuezView() {
-  const [user, setUser] = useState(null);
+  const { user, correo, cargando: cargandoSesion } = useUsuario();
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
   const [errorLogin, setErrorLogin] = useState('');
 
   const { competencia, etapa, competidores, turnos: turnosCrudos, cargando, error: errorConfig } = useEtapaActiva();
+  const { miembro, cargando: cargandoMiembro } = useMiembro(user, competencia?.id);
   const [boulderId, setBoulderId] = useState('');
   const [turnoIndex, setTurnoIndex] = useState(0);
   const [competidorId, setCompetidorId] = useState(null);
@@ -44,18 +66,20 @@ export default function JuezView() {
   const [dorsalBusqueda, setDorsalBusqueda] = useState('');
   const [score, setScore] = useState(resultadoVacio());
   const [listo, setListo] = useState(false);
+  const [pendiente, setPendiente] = useState(false);
+  const [aviso, setAviso] = useState('');
   const [editando, setEditando] = useState(false);
   const [borrador, setBorrador] = useState(resultadoVacio());
   const [errorEdicion, setErrorEdicion] = useState('');
   const [revisandoApelaciones, setRevisandoApelaciones] = useState(false);
-  const [guardando, setGuardando] = useState(false);
 
   const scoreRef = useRef(resultadoVacio());
-  const escriturasPendientes = useRef(0);
-  const colaEscritura = useRef(Promise.resolve());
   const docActivo = useRef('');
-  const escribiendoDoc = useRef('');
-  const boulders = etapa?.boulders?.length ? etapa.boulders : [];
+  const esJuez = miembro?.rol === 'juez' || miembro?.rol === 'juez_jefe';
+  const esJuezJefe = miembro?.rol === 'juez_jefe';
+  const etapaCerrada = etapa?.estado === 'cerrada';
+  const asignados = miembro?.asignaciones?.[etapa?.id] || [];
+  const boulders = (etapa?.boulders || []).filter((id) => esJuezJefe || asignados.includes(id));
   const competidoresPorId = Object.fromEntries(competidores.map((item) => [item.id, item]));
   const turnos = turnosCrudos
     .filter((turno) => etapa && turno.etapaId === etapa.id && turno.boulderId === boulderId && competidoresPorId[turno.competidorId])
@@ -66,13 +90,13 @@ export default function JuezView() {
   const competidor = competidoresPorId[competidorId] || programada || null;
   const contextoRef = useRef({});
   contextoRef.current = { competidor, boulderId, competenciaId: competencia?.id, etapaId: etapa?.id };
+  const bouldersClave = boulders.join(',');
 
   useEffect(() => {
-    if (!etapa || !user) return;
-    const asignado = etapa.asignaciones?.[user.email];
-    const preferido = asignado || leerPreferencia(`juez.boulder.${etapa.id}`, boulders[0] || '');
+    if (!etapa) return;
+    const preferido = leerPreferencia(`juez.boulder.${etapa.id}`, '');
     setBoulderId(boulders.includes(preferido) ? preferido : (boulders[0] || ''));
-  }, [etapa?.id, user?.email]);
+  }, [etapa?.id, bouldersClave]);
 
   useEffect(() => {
     if (!etapa || !boulderId) return;
@@ -82,31 +106,30 @@ export default function JuezView() {
   }, [etapa?.id, boulderId]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (usuarioActual) => {
-      setUser(usuarioActual);
-      if (!usuarioActual) setListo(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
     document.body.classList.add('kiosk-mode');
     return () => document.body.classList.remove('kiosk-mode');
   }, []);
 
   useEffect(() => {
-    if (!user || !competidor || !competencia || !etapa) return undefined;
+    if (!user || !esJuez || !competidor || !competencia || !etapa || !boulderId) return undefined;
     const clave = { competenciaId: competencia.id, etapaId: etapa.id, competidorId: competidor.id, boulderId };
-    const docId = `${clave.competenciaId}__${clave.etapaId}__${clave.competidorId}__${clave.boulderId}`;
+    const docId = idResultado(clave);
     docActivo.current = docId;
     const vacio = resultadoVacio();
     scoreRef.current = vacio;
     setScore(vacio);
     setListo(false);
     setEditando(false);
-    const unsubscribe = onSnapshot(resultadoDocRef(db, clave), (snap) => {
+    setAviso('');
+    let primera = true;
+    const unsubscribe = onSnapshot(resultadoDocRef(db, clave), { includeMetadataChanges: true }, (snap) => {
       if (docActivo.current !== docId) return;
-      if (escriturasPendientes.current > 0 && escribiendoDoc.current === docId) return;
+      setPendiente(snap.metadata.hasPendingWrites);
+      // Mientras hay escrituras propias en cola, el estado local ya va adelante:
+      // un snapshot intermedio haría retroceder el marcador. Si el servidor
+      // rechaza una escritura, llega un snapshot sin pendientes con el valor vigente.
+      if (!primera && snap.metadata.hasPendingWrites) return;
+      primera = false;
       const next = leerResultado(snap.data());
       scoreRef.current = next;
       setScore(next);
@@ -114,87 +137,61 @@ export default function JuezView() {
     }, (error) => {
       console.error('Error al leer el resultado:', error);
       setListo(true);
-      alert('No se pudo leer el resultado. Revisa tu conexión.');
+      setAviso('No se pudo leer el resultado. Revisa tu conexión.');
     });
     return () => unsubscribe();
-  }, [user, competidor?.id, boulderId, competencia?.id, etapa?.id]);
+  }, [user, esJuez, competidor?.id, boulderId, competencia?.id, etapa?.id]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
       await signInWithEmailAndPassword(auth, email, pin);
       setErrorLogin('');
-    } catch (error) {
+    } catch {
       setErrorLogin('Credenciales incorrectas. Intenta de nuevo.');
     }
   };
 
-  const persistir = async (next, contexto) => {
+  // La escritura se aplica al instante en la caché local (también sin red).
+  // No se espera al servidor: Firestore envía las escrituras en orden.
+  const escribir = (next, accion) => {
+    const contexto = contextoRef.current;
     const clave = {
       competenciaId: contexto.competenciaId,
       etapaId: contexto.etapaId,
       competidorId: contexto.competidor.id,
       boulderId: contexto.boulderId,
     };
-    await setDoc(resultadoDocRef(db, clave), {
-      competenciaId: contexto.competenciaId,
-      etapaId: contexto.etapaId,
-      competidorId: contexto.competidor.id,
-      nombre: contexto.competidor.nombre,
-      dorsal: contexto.competidor.dorsal,
-      categoria: contexto.competidor.categoria,
-      categoriaId: contexto.competidor.categoriaId,
-      boulderId: contexto.boulderId,
-      intentos: next.intentos,
-      zonaEnIntento: next.zonaEnIntento,
-      topEnIntento: next.topEnIntento,
-      actualizadoPor: user.email,
-      actualizadoEn: serverTimestamp(),
+    const marcador = { ...next, version: scoreRef.current.version + 1 };
+    scoreRef.current = marcador;
+    setScore(marcador);
+    setAviso('');
+    guardarResultado(db, clave, marcador, accion, correo).catch((error) => {
+      console.error('Error al guardar:', error);
+      if (docActivo.current === idResultado(clave)) setAviso(mensajeErrorEscritura(error));
     });
   };
 
-  const encolarEscritura = (next) => {
-    const contexto = { ...contextoRef.current, competidor: contextoRef.current.competidor };
-    const docId = `${contexto.competenciaId}__${contexto.etapaId}__${contexto.competidor.id}__${contexto.boulderId}`;
-    escribiendoDoc.current = docId;
-    escriturasPendientes.current += 1;
-    colaEscritura.current = colaEscritura.current
-      .then(() => persistir(next, contexto))
-      .catch((error) => {
-        console.error('Error al guardar:', error);
-        alert('Error al guardar. Revisa tu conexión.');
-      })
-      .finally(() => {
-        escriturasPendientes.current -= 1;
-      });
-  };
-
-  const aplicar = (mutator) => {
-    const next = mutator({ ...scoreRef.current });
-    scoreRef.current = next;
-    setScore(next);
-    encolarEscritura(next);
-  };
-
   const sumarIntento = () => {
-    if (scoreRef.current.topEnIntento != null) return;
-    aplicar((actual) => ({ ...actual, intentos: actual.intentos + 1 }));
+    const actual = scoreRef.current;
+    if (actual.topEnIntento != null) return;
+    escribir({ ...actual, intentos: actual.intentos + 1 }, 'intento');
   };
 
   const marcarZona = () => {
     const actual = scoreRef.current;
     if (actual.zonaEnIntento != null || actual.topEnIntento != null || actual.intentos < 1) return;
-    aplicar((prev) => ({ ...prev, zonaEnIntento: prev.intentos }));
+    escribir({ ...actual, zonaEnIntento: actual.intentos }, 'zona');
   };
 
   const marcarTop = () => {
     const actual = scoreRef.current;
     if (actual.topEnIntento != null || actual.intentos < 1) return;
-    aplicar((prev) => ({
-      ...prev,
-      topEnIntento: prev.intentos,
-      zonaEnIntento: prev.zonaEnIntento ?? prev.intentos,
-    }));
+    escribir({
+      ...actual,
+      topEnIntento: actual.intentos,
+      zonaEnIntento: actual.zonaEnIntento ?? actual.intentos,
+    }, 'top');
   };
 
   const abrirEdicion = () => {
@@ -226,36 +223,20 @@ export default function JuezView() {
     setErrorEdicion('');
   };
 
-  const guardarEdicion = async () => {
+  const guardarEdicion = () => {
     const preparado = prepararResultado(borrador);
     const error = validarResultado(preparado);
     if (error) {
       setErrorEdicion(error);
       return;
     }
-    const contexto = contextoRef.current;
-    setGuardando(true);
-    scoreRef.current = preparado;
-    setScore(preparado);
-    setBorrador(preparado);
-    escribiendoDoc.current = `${contexto.competenciaId}__${contexto.etapaId}__${contexto.competidor.id}__${contexto.boulderId}`;
-    escriturasPendientes.current += 1;
-    colaEscritura.current = colaEscritura.current
-      .then(() => persistir(preparado, contexto))
-      .then(() => setEditando(false))
-      .catch((error) => {
-        console.error('Error al guardar la corrección:', error);
-        setErrorEdicion('No se pudo guardar. Revisa tu conexión.');
-      })
-      .finally(() => {
-        escriturasPendientes.current -= 1;
-        setGuardando(false);
-      });
+    escribir(preparado, 'edicion');
+    setEditando(false);
   };
 
   const elegirBoulder = (id) => {
     const indiceGuardado = Number(leerPreferencia(`juez.turno.${etapa.id}.${id}`, '0'));
-    localStorage.setItem(`juez.boulder.${etapa.id}`, id);
+    guardarPreferencia(`juez.boulder.${etapa.id}`, id);
     setBoulderId(id);
     setTurnoIndex(Number.isInteger(indiceGuardado) ? indiceGuardado : 0);
     setCompetidorId(null);
@@ -266,7 +247,7 @@ export default function JuezView() {
   const fijarTurno = (indice) => {
     if (!turnos.length) return;
     const acotado = Math.max(0, Math.min(indice, turnos.length - 1));
-    localStorage.setItem(`juez.turno.${etapa.id}.${boulderId}`, String(acotado));
+    guardarPreferencia(`juez.turno.${etapa.id}.${boulderId}`, String(acotado));
     setTurnoIndex(acotado);
     setCompetidorId(turnos[acotado].competidor.id);
     setBuscando(false);
@@ -279,9 +260,13 @@ export default function JuezView() {
     setDorsalBusqueda('');
   };
 
+  if (cargandoSesion) {
+    return <main style={pantallaSimple}>Cargando...</main>;
+  }
+
   if (!user) {
     return (
-      <div style={{ padding: '2rem', fontFamily: 'sans-serif', textAlign: 'center', color: '#111', backgroundColor: '#fff', minHeight: '100svh', boxSizing: 'border-box' }}>
+      <div style={pantallaSimple}>
         <h2>Acceso Jueces</h2>
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '300px', margin: '0 auto' }}>
           <input type="email" placeholder="Correo asignado (ej: w1@tuclub.com)" value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: '1rem', fontSize: '1.2rem' }} required />
@@ -293,13 +278,13 @@ export default function JuezView() {
     );
   }
 
-  if (cargando) {
-    return <main style={{ padding: '2rem', fontFamily: 'sans-serif' }}>Cargando competencia...</main>;
+  if (cargando || (competencia && cargandoMiembro)) {
+    return <main style={pantallaSimple}>Cargando competencia...</main>;
   }
 
   if (!etapa) {
     return (
-      <main style={{ padding: '2rem', fontFamily: 'sans-serif', textAlign: 'center' }}>
+      <main style={pantallaSimple}>
         <h2>No hay una etapa activa</h2>
         <p>Carga la competencia, las competidoras y el orden de paso antes de puntuar.</p>
         <Link to="/admin">Ir a administrar</Link>
@@ -308,9 +293,30 @@ export default function JuezView() {
     );
   }
 
+  if (!esJuez) {
+    return (
+      <main style={pantallaSimple}>
+        <h2>Tu cuenta no es juez en {competencia.nombre}</h2>
+        <p>{correo}</p>
+        <p>Pide a la organización que te agregue como juez en esta competencia.</p>
+        <button onClick={() => signOut(auth)} style={{ padding: '1rem', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px' }}>Cerrar sesión</button>
+      </main>
+    );
+  }
+
+  if (!boulders.length) {
+    return (
+      <main style={pantallaSimple}>
+        <h2>No tienes bloques asignados en {etapa.nombre}</h2>
+        <p>Pide a la organización que te asigne uno o más bloques.</p>
+        <button onClick={() => signOut(auth)} style={{ padding: '1rem', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px' }}>Cerrar sesión</button>
+      </main>
+    );
+  }
+
   const hayTop = score.topEnIntento != null;
   const hayZona = score.zonaEnIntento != null;
-  const puedeMarcar = score.intentos >= 1 && !hayTop;
+  const puedeMarcar = score.intentos >= 1 && !hayTop && !etapaCerrada;
 
   return (
     <div style={{ width: '100%', maxWidth: '100%', padding: '1rem', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', minHeight: '100svh', color: '#111', backgroundColor: '#fff', boxSizing: 'border-box', overflowX: 'hidden' }}>
@@ -327,7 +333,7 @@ export default function JuezView() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0f0f0', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem' }}>
         <div>
-          <h4 style={{ margin: 0, color: '#666' }}>{etapa.nombre} · {competencia.nombre} · {user.email}</h4>
+          <h4 style={{ margin: 0, color: '#666' }}>{etapa.nombre} · {competencia.nombre} · {correo}{esJuezJefe ? ' · juez jefe' : ''}</h4>
           {competidor ? (
             <>
               <h2 style={{ margin: '5px 0 0 0', fontSize: '2rem', color: '#111' }}>#{competidor.dorsal} {competidor.nombre}</h2>
@@ -386,18 +392,21 @@ export default function JuezView() {
         </div>
       )}
 
+      {etapaCerrada && <p style={{ margin: '0 0 0.75rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: '#f8d7da', fontWeight: 'bold' }}>La etapa está cerrada. Los resultados ya no se pueden modificar.</p>}
+      {aviso && <p style={{ margin: '0 0 0.75rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: '#fff3cd', fontWeight: 'bold' }}>{aviso}</p>}
+      {pendiente && <p style={{ margin: '0 0 0.75rem', color: '#666' }}>Guardado en la tablet. Pendiente de sincronizar…</p>}
       {!listo && <p style={{ textAlign: 'center' }}>Cargando resultado...</p>}
 
       {revisandoApelaciones && (
-        <ApelacionesJuez etapaId={etapa?.id} juezEmail={user.email} />
+        <ApelacionesJuez competenciaId={competencia.id} etapaId={etapa.id} juezEmail={correo} puedeResolver={esJuezJefe} />
       )}
 
       {listo && competidor && !editando && !buscando && !revisandoApelaciones && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flexGrow: 1 }}>
           <button
             onClick={sumarIntento}
-            disabled={hayTop}
-            style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayTop ? '#ccc' : '#e0e0e0' }}>
+            disabled={hayTop || etapaCerrada}
+            style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayTop || etapaCerrada ? '#ccc' : '#e0e0e0' }}>
             + INTENTO
           </button>
 
@@ -440,12 +449,12 @@ export default function JuezView() {
         {editando ? (
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button onClick={() => setEditando(false)} style={{ padding: '1rem', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Cancelar</button>
-            <button onClick={guardarEdicion} disabled={guardando} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>
-              {guardando ? 'Guardando...' : 'Actualizar'}
+            <button onClick={guardarEdicion} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>
+              Actualizar
             </button>
           </div>
         ) : (
-          <button onClick={abrirEdicion} disabled={!listo || !competidor} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Editar</button>
+          <button onClick={abrirEdicion} disabled={!listo || !competidor || etapaCerrada} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Editar</button>
         )}
         <button onClick={() => setRevisandoApelaciones((abierta) => !abierta)} style={{ padding: '1rem', backgroundColor: revisandoApelaciones ? '#111' : '#fff', color: revisandoApelaciones ? '#fff' : '#111', border: '1px solid #111', borderRadius: '8px' }}>
           {revisandoApelaciones ? 'Volver a puntuar' : 'Apelaciones'}
@@ -456,46 +465,52 @@ export default function JuezView() {
   );
 }
 
-function ApelacionesJuez({ etapaId, juezEmail }) {
+function ApelacionesJuez({ competenciaId, etapaId, juezEmail, puedeResolver }) {
   const [apelaciones, setApelaciones] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!etapaId) return undefined;
-    return onSnapshot(collection(db, 'apelaciones'), (snapshot) => {
-      setApelaciones(snapshot.docs
-        .map((item) => ({ id: item.id, ...item.data() }))
-        .filter((item) => item.etapaId === etapaId && item.estado === 'en_evaluacion'));
-    });
-  }, [etapaId]);
+    const consulta = query(
+      apelacionesCol(db, competenciaId),
+      where('etapaId', '==', etapaId),
+      where('estado', '==', 'en_evaluacion'),
+    );
+    return onSnapshot(consulta, (snapshot) => {
+      setApelaciones(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+    }, () => setError('No se pudieron leer las apelaciones.'));
+  }, [competenciaId, etapaId]);
 
   const resolver = async (id, estado) => {
     setError('');
     try {
-      await updateDoc(doc(db, 'apelaciones', id), {
+      await updateDoc(doc(apelacionesCol(db, competenciaId), id), {
         estado,
         resueltaPor: juezEmail,
         resueltaEn: serverTimestamp(),
       });
     } catch {
-      setError('No se pudo resolver la apelación. Publica las reglas actualizadas.');
+      setError('No se pudo resolver la apelación.');
     }
   };
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
       <h2 style={{ margin: 0, color: '#111' }}>Apelaciones en evaluación</h2>
-      <p style={{ margin: 0, color: '#555' }}>Aceptar o rechazar no cambia el marcador. Si aceptas una corrección, anótala en la tablet.</p>
+      <p style={{ margin: 0, color: '#555' }}>
+        {puedeResolver
+          ? 'Aceptar o rechazar no cambia el marcador. Si aceptas una corrección, anótala con Editar.'
+          : 'Solo el juez jefe puede aceptar o rechazar apelaciones.'}
+      </p>
       {error && <p style={{ margin: 0, color: '#dc3545', fontWeight: 'bold' }}>{error}</p>}
       {apelaciones.length === 0 && <p style={{ margin: 0 }}>No hay apelaciones en evaluación.</p>}
       {apelaciones.map((item) => (
         <article key={item.id} style={{ backgroundColor: '#f7f7f7', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           <strong>{item.tipo === 'resultado' ? `#${item.dorsal} ${item.competidorNombre} · ${item.boulderId}` : 'Situación general'}</strong>
           <p style={{ margin: 0 }}>{item.argumento}</p>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {puedeResolver && <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button onClick={() => resolver(item.id, 'aceptada')} style={{ padding: '0.8rem 1rem', border: 'none', borderRadius: '8px', backgroundColor: '#28a745', color: '#fff', fontWeight: 'bold' }}>Aceptar</button>
             <button onClick={() => resolver(item.id, 'rechazada')} style={{ padding: '0.8rem 1rem', border: 'none', borderRadius: '8px', backgroundColor: '#dc3545', color: '#fff', fontWeight: 'bold' }}>Rechazar</button>
-          </div>
+          </div>}
         </article>
       ))}
     </section>

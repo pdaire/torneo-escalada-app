@@ -1,11 +1,8 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
+// La configuración web de Firebase es pública: la seguridad está en firestore.rules.
 const firebaseConfig = {
   apiKey: "AIzaSyCHnGqbljxgxaOhcvu3E_LJ1gFbkWy3Y6g",
   authDomain: "torneo-escalada-app.firebaseapp.com",
@@ -15,21 +12,11 @@ const firebaseConfig = {
   appId: "1:766624450650:web:9ce24969ef5cc729e33063"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Exportamos la Base de Datos y la Autenticación para usarlas en otras pantallas
-export const db = getFirestore(app);
+// Caché offline compartida entre pestañas: la tablet sigue anotando sin red
+// y sincroniza al volver la conexión.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 export const auth = getAuth(app);
-
-// Activar persistencia Offline
-enableIndexedDbPersistence(db)
-  .catch((err) => {
-    if (err.code == 'failed-precondition') {
-      console.warn("Múltiples pestañas abiertas, persistencia offline solo funciona en una.");
-    } else if (err.code == 'unimplemented') {
-      console.warn("El navegador actual no soporta persistencia offline.");
-    }
-  });
-
-  

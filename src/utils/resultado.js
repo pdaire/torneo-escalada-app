@@ -1,5 +1,4 @@
-import { collection, doc } from 'firebase/firestore';
-import { decimasBoulder } from './score';
+import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 
 export function idResultado({ competenciaId, etapaId, competidorId, boulderId }) {
   return [competenciaId, etapaId, competidorId, boulderId].join('__');
@@ -14,7 +13,7 @@ export function resultadosColRef(db) {
 }
 
 export function resultadoVacio() {
-  return { intentos: 0, zonaEnIntento: null, topEnIntento: null };
+  return { intentos: 0, zonaEnIntento: null, topEnIntento: null, version: 0 };
 }
 
 export function leerResultado(data) {
@@ -23,6 +22,7 @@ export function leerResultado(data) {
     intentos: data.intentos ?? 0,
     zonaEnIntento: data.zonaEnIntento ?? null,
     topEnIntento: data.topEnIntento ?? null,
+    version: data.version ?? 0,
   };
 }
 
@@ -55,29 +55,32 @@ export function validarResultado({ intentos, zonaEnIntento, topEnIntento }) {
   return '';
 }
 
-export function rankingFromResultados(docs) {
-  const agrupado = {};
-
-  docs.forEach((dato) => {
-    if (!dato.competidorId) return;
-    if (!agrupado[dato.competidorId]) {
-      agrupado[dato.competidorId] = {
-        id: dato.competidorId,
-        nombre: dato.nombre,
-        dorsal: dato.dorsal,
-        categoria: dato.categoria,
-        boulders: {},
-      };
-    }
-    agrupado[dato.competidorId].boulders[dato.boulderId] = {
-      zonaEnIntento: dato.zonaEnIntento ?? null,
-      topEnIntento: dato.topEnIntento ?? null,
-    };
+// Escribe el resultado y su entrada de historial en un solo batch.
+// `marcador.version` tiene que ser la versión anterior + 1: las reglas rechazan
+// una escritura basada en un estado viejo.
+export function guardarResultado(db, clave, marcador, accion, autor) {
+  const ref = resultadoDocRef(db, clave);
+  const batch = writeBatch(db);
+  batch.set(ref, {
+    competenciaId: clave.competenciaId,
+    etapaId: clave.etapaId,
+    competidorId: clave.competidorId,
+    boulderId: clave.boulderId,
+    intentos: marcador.intentos,
+    zonaEnIntento: marcador.zonaEnIntento,
+    topEnIntento: marcador.topEnIntento,
+    version: marcador.version,
+    actualizadoPor: autor,
+    actualizadoEn: serverTimestamp(),
   });
-
-  return Object.values(agrupado).map((comp) => {
-    const decimas = Object.values(comp.boulders)
-      .reduce((total, boulder) => total + decimasBoulder(boulder), 0);
-    return { ...comp, decimas };
+  batch.set(doc(ref, 'historial', `v${marcador.version}`), {
+    version: marcador.version,
+    accion,
+    intentos: marcador.intentos,
+    zonaEnIntento: marcador.zonaEnIntento,
+    topEnIntento: marcador.topEnIntento,
+    autor,
+    en: serverTimestamp(),
   });
+  return batch.commit();
 }
