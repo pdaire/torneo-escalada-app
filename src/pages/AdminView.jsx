@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { deleteDoc, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, deleteDoc, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { BOULDERS, COMPETIDORES } from '../data/ordenAbsolutaDamas';
+import { cargarDemo } from '../data/cargarDemo';
+import { DEMO_DELEGADO, DEMO_ID, DEMO_JUEZ } from '../data/demo';
 import { useEsAdmin, useUsuario } from '../hooks/useSesion';
 import { resultadosColRef } from '../utils/resultado';
 import { ordenDeSalida, rankingPorCategoria } from '../utils/ranking';
@@ -50,6 +52,7 @@ export default function AdminView() {
   const [etapaOrdenId, setEtapaOrdenId] = useState('');
   const [origenOrden, setOrigenOrden] = useState('categoria');
   const [asignacion, setAsignacion] = useState({ correo: '', etapaId: '' });
+  const [cargandoDemo, setCargandoDemo] = useState(false);
 
   useEffect(() => {
     document.body.classList.add('admin-mode');
@@ -130,6 +133,7 @@ export default function AdminView() {
         duracionTurno: Number(datos.get('duracion')) || 4,
         activa: etapas.length === 0,
         estado: 'abierta',
+        categoriasCerradas: [],
         etapaPreviaId: datos.get('etapaPreviaId') || null,
       });
     });
@@ -148,6 +152,28 @@ export default function AdminView() {
       : `¿Reabrir ${etapa.nombre}? Los jueces podrán volver a modificar resultados.`;
     if (!window.confirm(pregunta)) return;
     ejecutar(() => updateDoc(doc(etapasCol(db, competenciaId), etapa.id), { estado: cerrar ? 'cerrada' : 'abierta' }));
+  };
+
+  const cambiarCategoriaCerrada = (etapa, categoriaId, nombre) => {
+    const cerrar = !(etapa.categoriasCerradas || []).includes(categoriaId);
+    const pregunta = cerrar
+      ? `¿Finalizar ${nombre} en ${etapa.nombre}? Los jueces ya no podrán modificar sus resultados.`
+      : `¿Reabrir ${nombre} en ${etapa.nombre}?`;
+    if (!window.confirm(pregunta)) return;
+    ejecutar(() => updateDoc(doc(etapasCol(db, competenciaId), etapa.id), {
+      categoriasCerradas: cerrar ? arrayUnion(categoriaId) : arrayRemove(categoriaId),
+    }));
+  };
+
+  const cargarCompetenciaDemo = () => {
+    const pregunta = `¿Cargar la competencia demo y dejarla activa? El tablero público pasará a mostrarla. `
+      + `Si ya existe, se reinicia: se pierden los resultados anotados en ella.`;
+    if (!window.confirm(pregunta)) return;
+    setCargandoDemo(true);
+    ejecutar(async () => {
+      await cargarDemo(db, correo, competencias);
+      setCompetenciaId(DEMO_ID);
+    }).finally(() => setCargandoDemo(false));
   };
 
   const agregarCompetidor = (evento) => {
@@ -405,9 +431,18 @@ export default function AdminView() {
 
       <section className="admin-section">
         <h2>Competencia</h2>
-        {import.meta.env.DEV && (
-          <button onClick={importarEjemplo} className="admin-btn">Cargar ejemplo Baguales 2026</button>
-        )}
+        <div className="admin-row">
+          <button onClick={cargarCompetenciaDemo} disabled={cargandoDemo} className="admin-btn">
+            {cargandoDemo ? 'Cargando demo…' : 'Cargar o reiniciar competencia demo'}
+          </button>
+          {import.meta.env.DEV && (
+            <button onClick={importarEjemplo} className="admin-btn-secondary">Cargar ejemplo Baguales 2026</button>
+          )}
+        </div>
+        <p className="admin-meta">
+          La demo tiene seis categorías, la clasificatoria cerrada y la final en curso en Mujeres Adultas.
+          Juez: {DEMO_JUEZ}. Delegado: {DEMO_DELEGADO}. Tu cuenta queda como juez jefe de la demo.
+        </p>
         <form onSubmit={crearCompetencia} className="admin-row">
           <input name="nombre" placeholder="Nombre" required />
           <input name="fecha" type="date" required />
@@ -446,7 +481,8 @@ export default function AdminView() {
               <button className="admin-btn">Agregar</button>
             </form>
             {etapas.map((item) => (
-              <div key={item.id} className="admin-row">
+              <div key={item.id} className="admin-stack">
+              <div className="admin-row">
                 <strong>{item.nombre}</strong>
                 <span className="admin-meta">
                   {item.boulders?.join(', ')}
@@ -457,6 +493,20 @@ export default function AdminView() {
                 <button onClick={() => cambiarEstadoEtapa(item)} className="admin-btn-secondary">
                   {item.estado === 'cerrada' ? 'Reabrir' : 'Cerrar'}
                 </button>
+              </div>
+              {item.estado !== 'cerrada' && categorias.length > 1 && (
+                <div className="admin-row">
+                  <span className="admin-meta">Categorías:</span>
+                  {categorias.map(([id, nombre]) => {
+                    const cerrada = (item.categoriasCerradas || []).includes(id);
+                    return (
+                      <button key={id} onClick={() => cambiarCategoriaCerrada(item, id, nombre)} className="admin-btn-secondary">
+                        {nombre} · {cerrada ? 'finalizada (reabrir)' : 'en curso (finalizar)'}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               </div>
             ))}
           </section>

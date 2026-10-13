@@ -9,6 +9,18 @@ function bloquesVisibles(grupos, preferidos = []) {
   return [...preferidos, ...resto];
 }
 
+function EstadoCategoria({ finalizada }) {
+  return (
+    <span style={{
+      fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px',
+      padding: '0.25rem 0.6rem', borderRadius: '999px',
+      backgroundColor: finalizada ? '#2d2d2d' : '#ff4757', color: finalizada ? '#aaa' : '#fff',
+    }}>
+      {finalizada ? 'Finalizada' : 'En curso'}
+    </span>
+  );
+}
+
 function IconoLogro({ top, zona }) {
   const relleno = top != null ? '100%' : zona != null ? '50%' : '0%';
   const etiqueta = top != null ? 'Top' : zona != null ? 'Zona' : 'Sin zona';
@@ -65,7 +77,12 @@ export default function PublicDashboard() {
 
       {grupos.map((grupo) => (
         <section key={grupo.categoriaId} style={{ maxWidth: '1100px', margin: '0 auto 2.5rem' }}>
-          {variasCategorias && <h2 style={{ margin: '0 0 0.75rem', color: '#fff' }}>{grupo.categoria}</h2>}
+          {variasCategorias && (
+            <h2 style={{ margin: '0 0 0.75rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              {grupo.categoria}
+              <EstadoCategoria finalizada={etapa?.estado === 'cerrada' || Boolean(etapa?.categoriasCerradas?.includes(grupo.categoriaId))} />
+            </h2>
+          )}
           <div style={{ backgroundColor: '#1e1e1e', borderRadius: '12px', overflowX: 'auto', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
               <thead>

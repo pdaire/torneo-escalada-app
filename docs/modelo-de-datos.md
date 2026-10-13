@@ -38,6 +38,7 @@ erDiagram
         number duracionTurno "minutos"
         boolean activa "una sola activa por competencia"
         string estado "abierta | cerrada"
+        string_array categoriasCerradas "categoriaId finalizadas"
         string etapaPreviaId "opcional: desempate y clasificadas"
     }
 
@@ -153,6 +154,8 @@ Los resultados anteriores a este cambio no tienen `version`. Se leen como versi�
 
 `estado: cerrada` bloquea toda escritura de resultados en la etapa. El admin la cierra al terminar y la puede reabrir.
 
+`categoriasCerradas` finaliza categorías sueltas dentro de una etapa abierta, por ejemplo cuando una final termina antes que otra. Las reglas bloquean los resultados de esas categorías y el tablero las marca como finalizadas.
+
 `etapaPreviaId` encadena rondas: desempata el ranking con la posición en la etapa previa y permite generar el orden de paso con sus clasificadas.
 
 ## Apelaciones
@@ -175,7 +178,7 @@ El archivo es `firestore.rules` y los tests están en `tests/rules/`.
 
 - El público lee competencias, etapas, competidoras, turnos y resultados.
 - Solo un admin escribe la configuración de una competencia.
-- Un juez escribe resultados solo en sus bloques asignados, con un marcador válido y en una etapa abierta. El juez jefe, en cualquier bloque.
+- Un juez escribe resultados solo en sus bloques asignados, con un marcador válido, en una etapa abierta y en una categoría no finalizada. El juez jefe, en cualquier bloque.
 - El historial es solo-agregar y lo leen los jueces de la competencia.
 - Un delegado crea apelaciones con su propio correo, edita sus borradores y lee solo las suyas.
 - Solo el juez jefe resuelve una apelación, y nunca una propia.

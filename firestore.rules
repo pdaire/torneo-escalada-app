@@ -44,6 +44,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/competencias/$(c)/etapas/$(e);
     }
 
+    function rutaCompetidor(c, id) {
+      return /databases/$(database)/documents/competencias/$(c)/competidores/$(id);
+    }
+
     function etapaAbierta(c, e) {
       return exists(rutaEtapa(c, e)) && get(rutaEtapa(c, e)).data.get('estado', 'abierta') == 'abierta';
     }
@@ -80,7 +84,9 @@ service cloud.firestore {
         && d.actualizadoEn == request.time
         && etapaAbierta(d.competenciaId, d.etapaId)
         && d.boulderId in get(rutaEtapa(d.competenciaId, d.etapaId)).data.boulders
-        && exists(/databases/$(database)/documents/competencias/$(d.competenciaId)/competidores/$(d.competidorId))
+        && exists(rutaCompetidor(d.competenciaId, d.competidorId))
+        && !(get(rutaCompetidor(d.competenciaId, d.competidorId)).data.get('categoriaId', '')
+          in get(rutaEtapa(d.competenciaId, d.etapaId)).data.get('categoriasCerradas', []))
         && puedeAnotar(d.competenciaId, d.etapaId, d.boulderId);
     }
 
@@ -135,7 +141,8 @@ service cloud.firestore {
       match /etapas/{etapaId} {
         allow read: if true;
         allow write: if esAdmin()
-          && request.resource.data.get('estado', 'abierta') in ['abierta', 'cerrada'];
+          && request.resource.data.get('estado', 'abierta') in ['abierta', 'cerrada']
+          && request.resource.data.get('categoriasCerradas', []) is list;
         allow delete: if esAdmin();
       }
 

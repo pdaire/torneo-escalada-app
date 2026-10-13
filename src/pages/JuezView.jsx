@@ -46,7 +46,7 @@ const pantallaSimple = { padding: '2rem', fontFamily: 'sans-serif', textAlign: '
 
 function mensajeErrorEscritura(error) {
   if (error?.code === 'permission-denied') {
-    return 'No se guardó: otro dispositivo cambió este resultado, la etapa está cerrada o no tienes este bloque asignado. Se muestra el valor vigente.';
+    return 'No se guardó: otro dispositivo cambió este resultado, la etapa o la categoría está cerrada, o no tienes este bloque asignado. Se muestra el valor vigente.';
   }
   return 'Error al guardar. Revisa tu conexión.';
 }
@@ -316,7 +316,9 @@ export default function JuezView() {
 
   const hayTop = score.topEnIntento != null;
   const hayZona = score.zonaEnIntento != null;
-  const puedeMarcar = score.intentos >= 1 && !hayTop && !etapaCerrada;
+  const categoriaCerrada = Boolean(competidor && etapa.categoriasCerradas?.includes(competidor.categoriaId));
+  const bloqueado = etapaCerrada || categoriaCerrada;
+  const puedeMarcar = score.intentos >= 1 && !hayTop && !bloqueado;
 
   return (
     <div style={{ width: '100%', maxWidth: '100%', padding: '1rem', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', minHeight: '100svh', color: '#111', backgroundColor: '#fff', boxSizing: 'border-box', overflowX: 'hidden' }}>
@@ -393,6 +395,7 @@ export default function JuezView() {
       )}
 
       {etapaCerrada && <p style={{ margin: '0 0 0.75rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: '#f8d7da', fontWeight: 'bold' }}>La etapa está cerrada. Los resultados ya no se pueden modificar.</p>}
+      {!etapaCerrada && categoriaCerrada && <p style={{ margin: '0 0 0.75rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: '#f8d7da', fontWeight: 'bold' }}>{competidor.categoria} ya está finalizada. Sus resultados no se pueden modificar.</p>}
       {aviso && <p style={{ margin: '0 0 0.75rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: '#fff3cd', fontWeight: 'bold' }}>{aviso}</p>}
       {pendiente && <p style={{ margin: '0 0 0.75rem', color: '#666' }}>Guardado en la tablet. Pendiente de sincronizar…</p>}
       {!listo && <p style={{ textAlign: 'center' }}>Cargando resultado...</p>}
@@ -405,8 +408,8 @@ export default function JuezView() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flexGrow: 1 }}>
           <button
             onClick={sumarIntento}
-            disabled={hayTop || etapaCerrada}
-            style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayTop || etapaCerrada ? '#ccc' : '#e0e0e0' }}>
+            disabled={hayTop || bloqueado}
+            style={{ ...botonBase, flexGrow: 1, fontSize: '2.5rem', backgroundColor: hayTop || bloqueado ? '#ccc' : '#e0e0e0' }}>
             + INTENTO
           </button>
 
@@ -454,7 +457,7 @@ export default function JuezView() {
             </button>
           </div>
         ) : (
-          <button onClick={abrirEdicion} disabled={!listo || !competidor || etapaCerrada} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Editar</button>
+          <button onClick={abrirEdicion} disabled={!listo || !competidor || bloqueado} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Editar</button>
         )}
         <button onClick={() => setRevisandoApelaciones((abierta) => !abierta)} style={{ padding: '1rem', backgroundColor: revisandoApelaciones ? '#111' : '#fff', color: revisandoApelaciones ? '#fff' : '#111', border: '1px solid #111', borderRadius: '8px' }}>
           {revisandoApelaciones ? 'Volver a puntuar' : 'Apelaciones'}

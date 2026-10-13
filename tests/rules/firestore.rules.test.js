@@ -100,6 +100,13 @@ describe('resultados', () => {
     await denegado(guardarResultado(usuario('jefe@club.cl'), { ...clave, competidorId: 'fantasma' }, marcador(1), 'intento', 'jefe@club.cl'));
   });
 
+  it('no se anota en una categoría finalizada', async () => {
+    await setDoc(doc(sinReglas(), `competencias/${C}/etapas/final`), {
+      nombre: 'Final', boulders: ['M1', 'M2'], activa: true, estado: 'abierta', categoriasCerradas: ['damas'],
+    });
+    await denegado(guardarResultado(usuario('jefe@club.cl'), clave, marcador(1), 'intento', 'jefe@club.cl'));
+  });
+
   it('el historial no se edita ni se escribe suelto', async () => {
     const juez = usuario('juez@club.cl');
     await permitido(guardarResultado(juez, clave, marcador(1), 'intento', 'juez@club.cl'));
