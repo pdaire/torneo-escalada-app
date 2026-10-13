@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#121212"/>
+  <!-- Presa de escalada: contenido dentro del 60 % central (zona segura de íconos maskable). -->
+  <path d="M168 318 C140 262 168 190 236 168 C300 147 360 176 366 236 C372 296 330 342 268 352 C222 359 186 352 168 318 Z" fill="#ffc107"/>
+  <circle cx="262" cy="258" r="26" fill="#121212"/>
+  <circle cx="262" cy="258" r="11" fill="#ffc107"/>
+</svg>

@@ -183,3 +183,23 @@ export function categoriasDeBloque(etapa, turnos, competidores, boulderId) {
     }))
     .sort((a, b) => Number(a.finalizada) - Number(b.finalizada) || a.categoria.localeCompare(b.categoria));
 }
+
+// Firma de lo que muestra el tablero: el puntaje de cada fila (`id`) y la zona y el top
+// de cada celda (`id/bloque`). Un intento sin zona ni top no cambia nada visible.
+export function firmasDeRanking(grupos) {
+  const firmas = new Map();
+  grupos.forEach((grupo) => grupo.filas.forEach((fila) => {
+    firmas.set(fila.id, String(fila.decimas));
+    Object.entries(fila.boulders).forEach(([boulderId, marca]) => {
+      if (marca.zonaEnIntento == null && marca.topEnIntento == null) return;
+      firmas.set(`${fila.id}/${boulderId}`, `${marca.zonaEnIntento}|${marca.topEnIntento}`);
+    });
+  }));
+  return firmas;
+}
+
+// Claves cuya firma cambió, apareció o desapareció entre dos momentos.
+export function cambiosEntre(antes, despues) {
+  const claves = new Set([...antes.keys(), ...despues.keys()]);
+  return [...claves].filter((clave) => antes.get(clave) !== despues.get(clave));
+}

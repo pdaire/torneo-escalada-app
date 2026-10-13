@@ -27,6 +27,25 @@ Usa el mismo prefijo para `firebase init` y `firebase deploy`.
 
 `firebase.json` publica la carpeta `dist` de Vite y reescribe todas las rutas a `index.html`, para que `/juez` y `/admin` funcionen al recargar.
 
+Caché del navegador:
+
+| Ruta | `Cache-Control` | Por qué |
+| --- | --- | --- |
+| `/assets/**` | un año, `immutable` | Los nombres llevan hash: un cambio genera otro archivo. |
+| Páginas, `sw-juez.js`, `juez.webmanifest` | `no-cache` | Con red, el navegador siempre pide la versión publicada. |
+
+### App instalable del juez (PWA)
+
+- `public/juez.webmanifest`: nombre, íconos (`public/juez-*.png`, fuente en `juez-icono.svg`), pantalla completa, inicio en `/juez`.
+- `public/sw-juez.js`: service worker con alcance `/juez`. La página va primero a la red y, sin red, usa la última versión guardada; los archivos de `/assets` se sirven desde la caché y los de versiones anteriores se borran. No intercepta Firestore ni Firebase Auth.
+- `src/pwaJuez.js`: agrega el manifiesto y las etiquetas de iOS solo en `/juez`, y registra el service worker solo en el build de producción.
+
+Para probarlo como en producción (headers incluidos), compilar y servir con el emulador de Hosting:
+
+```bash
+npm run build && firebase emulators:start --only hosting --project demo-torneo   # http://127.0.0.1:5002/juez
+```
+
 Al fusionar en `main`, GitHub Actions corre `npm ci && npm test && npm run build` y publica el canal en vivo: https://torneo-escalada-app.web.app/
 
 Un pull request genera una vista previa y no toca el sitio público. El secreto del deploy es `FIREBASE_SERVICE_ACCOUNT_TORNEO_ESCALADA_APP`.

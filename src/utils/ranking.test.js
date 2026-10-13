@@ -171,3 +171,26 @@ describe('categoriasDeBloque', () => {
     ]);
   });
 });
+
+describe('cambios del tablero', () => {
+  const fila = (id, decimas, boulders) => ({ id, decimas, boulders });
+
+  it('detecta zona, top y puntaje nuevos, pero no un intento sin zona ni top', async () => {
+    const { cambiosEntre, firmasDeRanking } = await import('./ranking');
+    const antes = firmasDeRanking([{ filas: [
+      fila('a', 0, { W1: { zonaEnIntento: null, topEnIntento: null } }),
+      fila('b', 100, { W1: { zonaEnIntento: 1, topEnIntento: null } }),
+    ] }]);
+    const sinCambioVisible = firmasDeRanking([{ filas: [
+      fila('a', 0, {}),
+      fila('b', 100, { W1: { zonaEnIntento: 1, topEnIntento: null } }),
+    ] }]);
+    expect(cambiosEntre(antes, sinCambioVisible)).toEqual([]);
+
+    const despues = firmasDeRanking([{ filas: [
+      fila('a', 99, { W1: { zonaEnIntento: 2, topEnIntento: null } }),
+      fila('b', 250, { W1: { zonaEnIntento: 1, topEnIntento: 3 } }),
+    ] }]);
+    expect(cambiosEntre(antes, despues).sort()).toEqual(['a', 'a/W1', 'b', 'b/W1']);
+  });
+});

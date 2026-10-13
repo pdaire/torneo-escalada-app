@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { formatearPuntos } from '../utils/score';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
 import { useRankingEtapa } from '../hooks/useResultados';
-import { bloquesDeCategoria, estadoCategoria, ordenarEtapas } from '../utils/ranking';
+import { bloquesDeCategoria, cambiosEntre, estadoCategoria, firmasDeRanking, ordenarEtapas } from '../utils/ranking';
 import { EstadoCategoria, MarcaBoulder } from '../components/Marcador';
 import './publico.css';
 
@@ -12,6 +12,45 @@ function bloquesVisibles(grupo, etapa, turnos) {
   const propios = bloquesDeCategoria(etapa, turnos, grupo.categoriaId);
   const conResultado = new Set(grupo.filas.flatMap((fila) => Object.keys(fila.boulders)));
   return [...propios, ...[...conResultado].filter((id) => !propios.includes(id))];
+}
+
+const DURACION_DESTELLO = 3000;
+
+// Marca por unos segundos las celdas y filas que cambiaron desde el último snapshot,
+// para que el público note un resultado nuevo. Al cargar la página o cambiar de
+// etapa no marca nada. Devuelve clave → momento del cambio (sirve como `key` para
+// reiniciar la animación si la misma celda vuelve a cambiar).
+function useDestellos(grupos, contexto, listo) {
+  const anterior = useRef(null);
+  const temporizadores = useRef([]);
+  const [destellos, setDestellos] = useState(() => new Map());
+
+  useEffect(() => () => temporizadores.current.forEach(clearTimeout), []);
+
+  useEffect(() => {
+    if (!listo) return;
+    const firmas = firmasDeRanking(grupos);
+    const previo = anterior.current;
+    anterior.current = { contexto, firmas };
+    if (!previo || previo.contexto !== contexto) return;
+    const cambiadas = cambiosEntre(previo.firmas, firmas);
+    if (!cambiadas.length) return;
+    const momento = Date.now();
+    setDestellos((actual) => {
+      const siguiente = new Map(actual);
+      cambiadas.forEach((clave) => siguiente.set(clave, momento));
+      return siguiente;
+    });
+    temporizadores.current.push(setTimeout(() => {
+      setDestellos((actual) => {
+        const siguiente = new Map(actual);
+        cambiadas.forEach((clave) => { if (siguiente.get(clave) === momento) siguiente.delete(clave); });
+        return siguiente;
+      });
+    }, DURACION_DESTELLO));
+  }, [grupos, contexto, listo]);
+
+  return destellos;
 }
 
 function FiltroCategorias({ grupos, seleccionada, onElegir }) {
@@ -56,7 +95,7 @@ function PestanasEtapas({ etapas, seleccionada, onElegir }) {
   );
 }
 
-function TablaCategoria({ grupo, etapa, turnos, conTitulo }) {
+function TablaCategoria({ grupo, etapa, turnos, conTitulo, destellos }) {
   const bloques = bloquesVisibles(grupo, etapa, turnos);
   return (
     <section className="categoria">
@@ -78,7 +117,7 @@ function TablaCategoria({ grupo, etapa, turnos, conTitulo }) {
           </thead>
           <tbody>
             {grupo.filas.map((comp) => (
-              <tr key={comp.id}>
+              <tr key={comp.id} className={destellos.has(comp.id) ? 'fila-destello' : undefined}>
                 <td className={comp.posicion === 1 && comp.decimas > 0 ? 'pos oro' : 'pos'}>{comp.posicion}°</td>
                 <td className="nombre">
                   <Link to={`/competidor/${comp.id}`}>
@@ -86,12 +125,21 @@ function TablaCategoria({ grupo, etapa, turnos, conTitulo }) {
                     {comp.nombre}
                   </Link>
                 </td>
-                {bloques.map((boulderId) => (
-                  <td key={boulderId}>
-                    <MarcaBoulder boulder={comp.boulders[boulderId]} />
-                  </td>
-                ))}
-                <td className="puntaje">{formatearPuntos(comp.decimas)}</td>
+                {bloques.map((boulderId) => {
+                  const momento = destellos.get(`${comp.id}/${boulderId}`);
+                  return (
+                    <td key={boulderId}>
+                      <div key={momento || 'quieta'} className={momento ? 'celda-destello' : undefined}>
+                        <MarcaBoulder boulder={comp.boulders[boulderId]} />
+                      </div>
+                    </td>
+                  );
+                })}
+                <td className="puntaje">
+                  <span key={destellos.get(comp.id) || 'quieto'} className={destellos.has(comp.id) ? 'puntaje-destello' : undefined}>
+                    {formatearPuntos(comp.decimas)}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -106,6 +154,7 @@ export default function PublicDashboard() {
   const [parametros, setParametros] = useSearchParams();
   const etapa = etapas.find((item) => item.id === parametros.get('etapa')) || etapaActiva;
   const { grupos, error: errorCarga, cargando: cargandoResultados } = useRankingEtapa({ competencia, etapa, competidores, turnos });
+  const destellos = useDestellos(grupos, `${competencia?.id}/${etapa?.id}`, !cargando && !cargandoResultados);
 
   useEffect(() => {
     document.body.classList.add('public-board');
@@ -151,7 +200,7 @@ export default function PublicDashboard() {
       )}
 
       {!cargandoResultados && ordenados.map((grupo) => (
-        <TablaCategoria key={grupo.categoriaId} grupo={grupo} etapa={etapa} turnos={turnos} conTitulo={grupos.length > 1} />
+        <TablaCategoria key={grupo.categoriaId} grupo={grupo} etapa={etapa} turnos={turnos} conTitulo={grupos.length > 1} destellos={destellos} />
       ))}
     </div>
   );

@@ -39,6 +39,8 @@ Cada bloque muestra, como en las transmisiones de la IFSC, un rectángulo vacío
 
 La última columna es el puntaje IFSC de la ronda. La tabla se ordena por ese puntaje y desempata con la etapa previa. Si sigue el empate, se comparte posición y se ordena por dorsal. Ver [Puntuación](puntuacion.md).
 
+Cuando cambia un resultado visible (una zona, un top o un puntaje), la fila se ilumina en ámbar y la celda del bloque y el puntaje brillan unos segundos, para que el público lo note. Un intento sin zona ni top no destella, porque el tablero no lo muestra. Al abrir la página o cambiar de pestaña no destella nada.
+
 Tocar un nombre abre su ficha.
 
 ## Ficha de competidora `/competidor/:id`
@@ -53,6 +55,8 @@ Una tarjeta por etapa en que participa, en orden de competencia, con:
 El nombre de la etapa lleva a esa pestaña del tablero, filtrada por su categoría.
 
 ## Tablet del juez `/juez`
+
+Se puede instalar como app en el teléfono o la tablet (ver abajo).
 
 1. Entra con el correo y el PIN de Firebase Auth. La cuenta tiene que ser juez o juez jefe en la competencia activa.
 2. Elige el bloque entre los que tiene asignados en la etapa. El juez jefe ve todos. Un bloque se ve atenuado cuando todas las categorías que lo escalan están finalizadas.
@@ -69,6 +73,17 @@ Sin red, la tablet sigue anotando y avisa que hay cambios pendientes de sincroni
 La tablet anota solo en la etapa activa. No se cambia de etapa desde aquí: la etapa activa la elige la organización en `/admin`, y las etapas cerradas no se pueden modificar. Cuando todo lo del juez en la etapa está finalizado, la tablet lo avisa.
 
 Sin una etapa activa, la pantalla pide ir a administrar.
+
+### Instalar la app del juez
+
+Abrir https://torneo-escalada-app.web.app/juez y:
+
+- **iPhone o iPad (Safari):** Compartir → **Agregar a inicio**.
+- **Android (Chrome):** menú ⋮ → **Instalar app** (o **Agregar a la pantalla de inicio**).
+
+Queda un ícono "Juez" que abre la tablet a pantalla completa, directo en `/juez`. La app abre aunque no haya red: muestra la última versión descargada y los datos que Firestore tenga guardados en el equipo. Con red, siempre carga la versión publicada más nueva.
+
+Solo `/juez` se instala. El tablero, la ficha, `/admin` y `/delegado` siguen siendo web normal.
 
 ## Administración `/admin`
 
