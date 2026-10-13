@@ -2,20 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { resultadosColRef } from '../utils/resultado';
-import { posicionesDeRanking, rankingPorCategoria } from '../utils/ranking';
+import { rankingConDesempate } from '../utils/ranking';
 
-export function useResultadosEtapa(competenciaId, etapaId) {
-  const clave = competenciaId && etapaId ? `${competenciaId}/${etapaId}` : '';
+function useResultados(clave, crearConsulta) {
   const [estado, setEstado] = useState({ clave: '', resultados: [], error: '' });
 
   useEffect(() => {
     if (!clave) return undefined;
-    const consulta = query(
-      resultadosColRef(db),
-      where('competenciaId', '==', competenciaId),
-      where('etapaId', '==', etapaId),
-    );
-    return onSnapshot(consulta, (snapshot) => {
+    return onSnapshot(crearConsulta(), (snapshot) => {
       setEstado({ clave, resultados: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })), error: '' });
     }, (error) => {
       console.error('Error al escuchar resultados:', error);
@@ -23,26 +17,42 @@ export function useResultadosEtapa(competenciaId, etapaId) {
     });
   }, [clave]);
 
-  return estado.clave === clave ? estado : { resultados: [], error: '' };
+  if (!clave) return { resultados: [], error: '', cargando: false };
+  if (estado.clave !== clave) return { resultados: [], error: '', cargando: true };
+  return { ...estado, cargando: false };
 }
 
-// Ranking por categoría de la etapa. Si la etapa tiene `etapaPreviaId`,
+export function useResultadosEtapa(competenciaId, etapaId) {
+  return useResultados(
+    competenciaId && etapaId ? `${competenciaId}/${etapaId}` : '',
+    () => query(resultadosColRef(db), where('competenciaId', '==', competenciaId), where('etapaId', '==', etapaId)),
+  );
+}
+
+// Todos los resultados de la competencia: para la ficha de una competidora,
+// que necesita los rankings de todas las etapas.
+export function useResultadosCompetencia(competenciaId) {
+  return useResultados(
+    competenciaId || '',
+    () => query(resultadosColRef(db), where('competenciaId', '==', competenciaId)),
+  );
+}
+
+// Ranking por categoría de una etapa. Si tiene `etapaPreviaId`,
 // los empates se rompen con la posición en esa etapa.
 export function useRankingEtapa({ competencia, etapa, competidores, turnos }) {
   const actual = useResultadosEtapa(competencia?.id, etapa?.id);
   const previa = useResultadosEtapa(competencia?.id, etapa?.etapaPreviaId);
 
-  const grupos = useMemo(() => {
-    if (!etapa) return [];
-    const posicionesPrevias = etapa.etapaPreviaId
-      ? posicionesDeRanking(rankingPorCategoria({
-        competidores, turnos, resultados: previa.resultados, etapaId: etapa.etapaPreviaId,
-      }))
-      : new Map();
-    return rankingPorCategoria({
-      competidores, turnos, resultados: actual.resultados, etapaId: etapa.id, posicionesPrevias,
-    });
-  }, [etapa, competidores, turnos, actual.resultados, previa.resultados]);
+  const grupos = useMemo(() => (etapa
+    ? rankingConDesempate({ etapa, competidores, turnos, resultados: [...actual.resultados, ...previa.resultados] })
+    : []
+  ), [etapa, competidores, turnos, actual.resultados, previa.resultados]);
 
-  return { grupos, resultados: actual.resultados, error: actual.error || previa.error };
+  return {
+    grupos,
+    resultados: actual.resultados,
+    error: actual.error || previa.error,
+    cargando: actual.cargando || previa.cargando,
+  };
 }

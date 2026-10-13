@@ -3,6 +3,7 @@ import PublicDashboard from './pages/PublicDashboard';
 import JuezView from './pages/JuezView';
 import DelegadoView from './pages/DelegadoView';
 import AdminView from './pages/AdminView';
+import CompetidorView from './pages/CompetidorView';
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
       <Routes>
         {/* Ruta raíz: El tablero gigante para el público */}
         <Route path="/" element={<PublicDashboard />} />
+        <Route path="/competidor/:competidorId" element={<CompetidorView />} />
 
         {/* Ruta protegida: La tablet del juez */}
         <Route path="/juez" element={<JuezView />} />

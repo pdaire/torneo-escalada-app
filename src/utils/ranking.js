@@ -94,3 +94,68 @@ export function bloquesDeCategoria(etapa, turnos, categoriaId) {
   if (!usados.size) return todos;
   return [...todos.filter((id) => usados.has(id)), ...[...usados].filter((id) => !todos.includes(id))];
 }
+
+// Etapas en orden de competencia: primero las que no tienen etapa previa,
+// después cada una detrás de su etapa previa.
+export function ordenarEtapas(etapas) {
+  const porId = new Map(etapas.map((etapa) => [etapa.id, etapa]));
+  const profundidad = (etapa) => {
+    let nivel = 0;
+    let actual = etapa;
+    const vistas = new Set();
+    while (actual?.etapaPreviaId && porId.has(actual.etapaPreviaId) && !vistas.has(actual.id)) {
+      vistas.add(actual.id);
+      actual = porId.get(actual.etapaPreviaId);
+      nivel += 1;
+    }
+    return nivel;
+  };
+  return etapas.slice().sort((a, b) => profundidad(a) - profundidad(b) || String(a.nombre).localeCompare(String(b.nombre)));
+}
+
+// Ranking de una etapa con desempate por la etapa previa.
+// `resultados` puede traer resultados de varias etapas.
+export function rankingConDesempate({ etapa, competidores, turnos, resultados }) {
+  const posicionesPrevias = etapa.etapaPreviaId
+    ? posicionesDeRanking(rankingPorCategoria({ competidores, turnos, resultados, etapaId: etapa.etapaPreviaId }))
+    : new Map();
+  return rankingPorCategoria({ competidores, turnos, resultados, etapaId: etapa.id, posicionesPrevias });
+}
+
+// Todo lo de una competidora en la competencia, etapa por etapa.
+export function detalleCompetidor({ competidorId, etapas, competidores, turnos, resultados }) {
+  return ordenarEtapas(etapas).flatMap((etapa) => {
+    const grupos = rankingConDesempate({ etapa, competidores, turnos, resultados });
+    const grupo = grupos.find((item) => item.filas.some((fila) => fila.id === competidorId));
+    if (!grupo) return [];
+    const fila = grupo.filas.find((item) => item.id === competidorId);
+    const bloques = bloquesDeCategoria(etapa, turnos, grupo.categoriaId).map((boulderId) => {
+      const resultado = resultados.find((r) => (
+        r.etapaId === etapa.id && r.competidorId === competidorId && r.boulderId === boulderId
+      ));
+      const turno = turnos.find((t) => (
+        t.etapaId === etapa.id && t.competidorId === competidorId && t.boulderId === boulderId
+      ));
+      const marcador = {
+        intentos: resultado?.intentos ?? 0,
+        zonaEnIntento: resultado?.zonaEnIntento ?? null,
+        topEnIntento: resultado?.topEnIntento ?? null,
+      };
+      return {
+        boulderId,
+        ...marcador,
+        decimas: decimasBoulder(marcador),
+        horaProgramada: turno?.horaProgramada || null,
+        pendiente: !resultado || resultado.intentos === 0,
+      };
+    });
+    return [{
+      etapa,
+      posicion: fila.posicion,
+      decimas: fila.decimas,
+      totalCategoria: grupo.filas.length,
+      categoriaFinalizada: etapa.estado === 'cerrada' || Boolean(etapa.categoriasCerradas?.includes(grupo.categoriaId)),
+      bloques,
+    }];
+  });
+}

@@ -102,3 +102,44 @@ describe('bloquesDeCategoria', () => {
     expect(bloquesDeCategoria(etapa, turnos, 'otra')).toEqual(etapa.boulders);
   });
 });
+
+describe('ordenarEtapas', () => {
+  it('sigue la cadena de etapas previas', async () => {
+    const { ordenarEtapas } = await import('./ranking');
+    const etapas = [
+      { id: 'final', nombre: 'Final', etapaPreviaId: 'semi' },
+      { id: 'qualis', nombre: 'Qualis', etapaPreviaId: null },
+      { id: 'semi', nombre: 'Semi', etapaPreviaId: 'qualis' },
+    ];
+    expect(ordenarEtapas(etapas).map((e) => e.id)).toEqual(['qualis', 'semi', 'final']);
+  });
+});
+
+describe('detalleCompetidor', () => {
+  it('muestra posición, puntaje y bloques pendientes por etapa', async () => {
+    const { detalleCompetidor } = await import('./ranking');
+    const etapas = [
+      { id: 'final', nombre: 'Final', boulders: ['W1', 'W2'], etapaPreviaId: 'qualis', estado: 'abierta', categoriasCerradas: [] },
+      { id: 'qualis', nombre: 'Qualis', boulders: ['W1'], etapaPreviaId: null, estado: 'cerrada' },
+    ];
+    const turnos = [
+      { etapaId: 'qualis', categoriaId: 'damas', boulderId: 'W1', competidorId: 'd1', horaProgramada: '10:00' },
+      { etapaId: 'qualis', categoriaId: 'damas', boulderId: 'W1', competidorId: 'd2', horaProgramada: '10:04' },
+      { etapaId: 'final', categoriaId: 'damas', boulderId: 'W1', competidorId: 'd1', horaProgramada: '16:00' },
+      { etapaId: 'final', categoriaId: 'damas', boulderId: 'W2', competidorId: 'd1', horaProgramada: '16:04' },
+    ];
+    const resultados = [
+      resultado('d1', 'W1', 1, 2, 'qualis'),
+      resultado('d2', 'W1', 1, 1, 'qualis'),
+      { ...resultado('d1', 'W1', 2, null, 'final'), intentos: 3 },
+    ];
+    const detalle = detalleCompetidor({ competidorId: 'd1', etapas, competidores, turnos, resultados });
+    expect(detalle.map((d) => d.etapa.id)).toEqual(['qualis', 'final']);
+    expect(detalle[0]).toMatchObject({ posicion: 2, totalCategoria: 2, decimas: 249, categoriaFinalizada: true });
+    expect(detalle[1].categoriaFinalizada).toBe(false);
+    expect(detalle[1].bloques).toEqual([
+      { boulderId: 'W1', intentos: 3, zonaEnIntento: 2, topEnIntento: null, decimas: 99, horaProgramada: '16:00', pendiente: false },
+      { boulderId: 'W2', intentos: 0, zonaEnIntento: null, topEnIntento: null, decimas: 0, horaProgramada: '16:04', pendiente: true },
+    ]);
+  });
+});

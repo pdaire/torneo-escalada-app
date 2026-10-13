@@ -47,6 +47,14 @@ Una sola vez, en la consola de Firebase:
 
 Las asignaciones viejas (`asignaciones` dentro de la etapa) ya no se usan. Hay que volver a cargarlas como miembros.
 
+## Demo local
+
+```bash
+npm run demo:local
+```
+
+Levanta el emulador de Firestore, carga la competencia demo y abre la app en http://localhost:5174/ contra el emulador. No toca la base real y funciona sin internet. Sirve para mostrar el tablero y las fichas; el inicio de sesión (juez, delegado, admin) sigue usando Firebase Auth real, así que esas pantallas no funcionan en este modo. Necesita Java, igual que `test:rules`.
+
 ## Tests
 
 ```bash

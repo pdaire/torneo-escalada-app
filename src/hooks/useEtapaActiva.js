@@ -5,7 +5,7 @@ import { competenciasCol, competidoresCol, docsConId, etapasCol, turnosCol } fro
 
 export function useEtapaActiva() {
   const [competencia, setCompetencia] = useState(null);
-  const [etapa, setEtapa] = useState(null);
+  const [etapas, setEtapas] = useState([]);
   const [competidores, setCompetidores] = useState([]);
   const [turnos, setTurnos] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -26,15 +26,14 @@ export function useEtapaActiva() {
 
   useEffect(() => {
     if (!competencia) {
-      setEtapa(null);
+      setEtapas([]);
       setCompetidores([]);
       setTurnos([]);
       return undefined;
     }
 
     const unsubEtapas = onSnapshot(etapasCol(db, competencia.id), (snapshot) => {
-      const etapas = docsConId(snapshot);
-      setEtapa(etapas.find((item) => item.activa) || null);
+      setEtapas(docsConId(snapshot));
     });
     const unsubCompetidores = onSnapshot(competidoresCol(db, competencia.id), (snapshot) => {
       setCompetidores(docsConId(snapshot));
@@ -50,5 +49,6 @@ export function useEtapaActiva() {
     };
   }, [competencia?.id]);
 
-  return { competencia, etapa, competidores, turnos, cargando, error };
+  const etapa = etapas.find((item) => item.activa) || null;
+  return { competencia, etapa, etapas, competidores, turnos, cargando, error };
 }

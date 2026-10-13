@@ -2,14 +2,17 @@
 
 | Ruta | Quién la usa | Qué hace |
 | --- | --- | --- |
-| `/` | Público | Ranking en vivo de la etapa activa |
+| `/` | Público | Ranking en vivo de la etapa activa y de las etapas anteriores |
+| `/competidor/:id` | Público | Todos los resultados de una competidora en la competencia |
 | `/juez` | Juez | Anota intentos, zona y top en un bloque |
 | `/admin` | Organización | Arma la competencia, el orden de paso y la asignación de jueces |
 | `/delegado` | Delegado de club | Presenta apelaciones particulares o generales |
 
 ## Tablero `/`
 
-Muestra la competencia activa y su etapa activa, con una tabla por categoría marcada como **En curso** o **Finalizada**. Lista a todas las competidoras que tienen un turno en esa etapa, aunque todavía no tengan puntaje.
+Muestra la competencia activa. Arriba hay una pestaña por etapa, en orden de competencia (clasificatoria, semifinal, final). La etapa activa está marcada **En vivo** y es la que se abre por defecto. Las demás muestran sus resultados finales; la etapa elegida queda en la dirección (`/?etapa=semifinal`), así que el enlace se puede compartir.
+
+Hay una tabla por categoría, marcada como **En curso** o **Finalizada**. Las categorías en curso van primero. Cada tabla lista a todas las competidoras que tienen un turno en esa etapa, aunque todavía no tengan puntaje, y muestra solo los bloques de esa categoría.
 
 Cada bloque muestra, como en las transmisiones de la IFSC, un rectángulo vacío, medio lleno o lleno según no haya zona, haya zona o haya top. Al lado van dos números:
 
@@ -18,6 +21,19 @@ Cada bloque muestra, como en las transmisiones de la IFSC, un rectángulo vacío
 - `–` significa que todavía no se consiguió.
 
 La última columna es el puntaje IFSC de la ronda. La tabla se ordena por ese puntaje y desempata con la etapa previa. Si sigue el empate, se comparte posición y se ordena por dorsal. Ver [Puntuación](puntuacion.md).
+
+Tocar un nombre abre su ficha.
+
+## Ficha de competidora `/competidor/:id`
+
+Una tarjeta por etapa en que participa, en orden de competencia, con:
+
+- su posición dentro de la categoría y el puntaje de la etapa;
+- si la categoría está en curso o finalizada en esa etapa;
+- cada bloque con el intento de la zona, el del top, los intentos totales y los puntos;
+- los bloques que todavía no escala, con su hora programada.
+
+El nombre de la etapa lleva a esa pestaña del tablero.
 
 ## Tablet del juez `/juez`
 
