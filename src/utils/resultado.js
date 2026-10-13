@@ -1,4 +1,5 @@
 import { collection, doc } from 'firebase/firestore';
+import { decimasBoulder } from './score';
 
 export function idResultado({ competenciaId, etapaId, competidorId, boulderId }) {
   return [competenciaId, etapaId, competidorId, boulderId].join('__');
@@ -75,22 +76,8 @@ export function rankingFromResultados(docs) {
   });
 
   return Object.values(agrupado).map((comp) => {
-    let T = 0;
-    let z = 0;
-    let aT = 0;
-    let aZ = 0;
-
-    Object.values(comp.boulders).forEach((boulder) => {
-      if (boulder.topEnIntento != null) {
-        T += 1;
-        aT += boulder.topEnIntento;
-      }
-      if (boulder.zonaEnIntento != null) {
-        z += 1;
-        aZ += boulder.zonaEnIntento;
-      }
-    });
-
-    return { ...comp, T, z, aT, aZ };
+    const decimas = Object.values(comp.boulders)
+      .reduce((total, boulder) => total + decimasBoulder(boulder), 0);
+    return { ...comp, decimas };
   });
 }

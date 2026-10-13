@@ -1,21 +1,303 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import './pages.css';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { addDoc, collection, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { auth, db } from '../firebase';
+import { useEtapaActiva } from '../hooks/useEtapaActiva';
+import { resultadosColRef } from '../utils/resultado';
+import './delegado.css';
 
-function DelegadoView() {
+const ESTADOS = {
+  borrador: 'Borrador',
+  en_evaluacion: 'En evaluación',
+  aceptada: 'Aceptada',
+  rechazada: 'Rechazada',
+};
+
+function resumenResultado(resultado) {
+  if (!resultado) return 'Sin resultado registrado';
+  return [
+    `${resultado.intentos ?? 0} intentos`,
+    `zona: ${resultado.zonaEnIntento ?? '—'}`,
+    `top: ${resultado.topEnIntento ?? '—'}`,
+  ].join(' · ');
+}
+
+export default function DelegadoView() {
+  const [user, setUser] = useState(null);
+  const [email, setEmail] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [mensaje, setMensaje] = useState('');
+  const [tipo, setTipo] = useState('resultado');
+  const [competidorId, setCompetidorId] = useState('');
+  const [boulderId, setBoulderId] = useState('');
+  const [argumento, setArgumento] = useState('');
+  const [editandoId, setEditandoId] = useState(null);
+  const [enviando, setEnviando] = useState(false);
+  const [resultados, setResultados] = useState([]);
+  const [apelaciones, setApelaciones] = useState([]);
+  const { competencia, etapa, competidores, turnos, cargando } = useEtapaActiva();
+
+  useEffect(() => onAuthStateChanged(auth, setUser), []);
+
+  useEffect(() => {
+    document.body.classList.add('delegado-mode');
+    return () => document.body.classList.remove('delegado-mode');
+  }, []);
+
+  useEffect(() => {
+    if (!competencia || !etapa) {
+      return undefined;
+    }
+    const consulta = query(resultadosColRef(db), where('competenciaId', '==', competencia.id));
+    return onSnapshot(consulta, (snapshot) => {
+      setResultados(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
+        .filter((item) => item.etapaId === etapa.id));
+    });
+  }, [competencia, etapa]);
+
+  useEffect(() => {
+    if (!user) {
+      return undefined;
+    }
+    return onSnapshot(collection(db, 'apelaciones'), (snapshot) => {
+      setApelaciones(snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter((item) => item.autorUid === user.uid)
+        .sort((a, b) => (b.creadaEn?.seconds || 0) - (a.creadaEn?.seconds || 0)));
+    });
+  }, [user]);
+
+  const idsEnEtapa = useMemo(() => new Set(
+    turnos.filter((turno) => turno.etapaId === etapa?.id).map((turno) => turno.competidorId),
+  ), [turnos, etapa?.id]);
+  const participantes = idsEnEtapa.size
+    ? competidores.filter((item) => idsEnEtapa.has(item.id))
+    : competidores;
+  const boulders = useMemo(() => etapa?.boulders || [], [etapa]);
+  const competidorIdActivo = competidorId || participantes[0]?.id || '';
+  const boulderIdActivo = boulderId || boulders[0] || '';
+  const competidorSeleccionado = participantes.find((item) => item.id === competidorIdActivo);
+  const resultadoActual = resultados.find((item) => (
+    item.competidorId === competidorIdActivo && item.boulderId === boulderIdActivo
+  ));
+
+  const ingresar = async (evento) => {
+    evento.preventDefault();
+    try {
+      await signInWithEmailAndPassword(auth, email, pin);
+      setError('');
+    } catch {
+      setError('Credenciales incorrectas.');
+    }
+  };
+
+  const guardar = (estado) => async (evento) => {
+    evento.preventDefault();
+    const texto = argumento.trim();
+    if (texto.length < 10) {
+      setError('Explica el motivo de la apelación en al menos 10 caracteres.');
+      return;
+    }
+    if (!competencia || !etapa) {
+      setError('No hay una competencia y etapa activas.');
+      return;
+    }
+    if (tipo === 'resultado' && (!competidorSeleccionado || !boulderIdActivo)) {
+      setError('Elige la competidora y el bloque.');
+      return;
+    }
+
+    setEnviando(true);
+    setError('');
+    setMensaje('');
+    try {
+      const detalle = tipo === 'resultado' ? {
+        competidorId: competidorSeleccionado.id,
+        competidorNombre: competidorSeleccionado.nombre,
+        dorsal: competidorSeleccionado.dorsal,
+        boulderId: boulderIdActivo,
+        resultadoActual: resultadoActual ? {
+          intentos: resultadoActual.intentos ?? 0,
+          zonaEnIntento: resultadoActual.zonaEnIntento ?? null,
+          topEnIntento: resultadoActual.topEnIntento ?? null,
+        } : null,
+      } : {
+        competidorId: null,
+        competidorNombre: null,
+        dorsal: null,
+        boulderId: null,
+        resultadoActual: null,
+      };
+      const datos = {
+        tipo,
+        estado,
+        argumento: texto,
+        ...detalle,
+      };
+      if (editandoId) {
+        await updateDoc(doc(db, 'apelaciones', editandoId), datos);
+      } else {
+        await addDoc(collection(db, 'apelaciones'), {
+          ...datos,
+          competenciaId: competencia.id,
+          competenciaNombre: competencia.nombre,
+          etapaId: etapa.id,
+          etapaNombre: etapa.nombre,
+          autorUid: user.uid,
+          autorEmail: user.email,
+          creadaEn: serverTimestamp(),
+        });
+      }
+      setArgumento('');
+      setEditandoId(null);
+      setMensaje(estado === 'borrador'
+        ? 'Borrador guardado. Todavía no está en evaluación.'
+        : 'Apelación enviada a evaluación. El resultado no cambia hasta que un juez la resuelva.');
+    } catch (err) {
+      setError(err.code === 'permission-denied'
+        ? 'Firestore rechazó la apelación. Publica las reglas actualizadas.'
+        : 'No se pudo guardar la apelación.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const enviarBorrador = async (id) => {
+    setError('');
+    setMensaje('');
+    try {
+      await updateDoc(doc(db, 'apelaciones', id), { estado: 'en_evaluacion' });
+      setMensaje('Apelación enviada a evaluación.');
+    } catch {
+      setError('No se pudo enviar el borrador.');
+    }
+  };
+
+  const cargarBorrador = (item) => {
+    setEditandoId(item.id);
+    setTipo(item.tipo);
+    setCompetidorId(item.competidorId || '');
+    setBoulderId(item.boulderId || '');
+    setArgumento(item.argumento || '');
+    setMensaje('');
+    setError('');
+  };
+
+  if (!user) {
+    return (
+      <main className="delegado delegado-login">
+        <h1>Acceso de delegados</h1>
+        <p>Ingresa con el correo y PIN autorizados.</p>
+        <form onSubmit={ingresar} className="delegado-form">
+          <label>Correo<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+          <label>PIN<input type="password" value={pin} onChange={(e) => setPin(e.target.value)} required /></label>
+          <button className="delegado-btn">Ingresar</button>
+        </form>
+        {error && <p className="delegado-error">{error}</p>}
+      </main>
+    );
+  }
+
   return (
-    <main className="page">
-      <p className="page-kicker">Delegado</p>
-      <h1>Seguimiento del club</h1>
-      <p className="page-lead">
-        Monitoreo para los delegados de clubes. Esta pantalla se va a llenar
-        con el estado de cada competidor.
-      </p>
-      <nav className="page-nav" aria-label="Otras vistas">
-        <Link to="/">Tablero público</Link>
-        <Link to="/juez">Vista del juez</Link>
-      </nav>
+    <main className="delegado">
+      <header className="delegado-header">
+        <div>
+          <p className="delegado-kicker">Delegado</p>
+          <h1>Presentar apelación</h1>
+          <p>{competencia?.nombre || (cargando ? 'Cargando…' : 'Sin competencia activa')} · {etapa?.nombre || 'Sin etapa activa'}</p>
+        </div>
+        <div className="delegado-actions">
+          <Link to="/">Tablero</Link>
+          <button className="delegado-btn-secondary" onClick={() => signOut(auth)}>Salir</button>
+        </div>
+      </header>
+
+      {error && <p className="delegado-error">{error}</p>}
+      {mensaje && <p className="delegado-success">{mensaje}</p>}
+
+      <form onSubmit={guardar('en_evaluacion')} className="delegado-card delegado-form">
+        <fieldset className="delegado-tipos">
+          <legend>Tipo de apelación</legend>
+          <label><input type="radio" name="tipo" checked={tipo === 'resultado'} onChange={() => setTipo('resultado')} /> Resultado particular</label>
+          <label><input type="radio" name="tipo" checked={tipo === 'general'} onChange={() => setTipo('general')} /> Situación general</label>
+        </fieldset>
+
+        {tipo === 'resultado' && (
+          <>
+            <div className="delegado-grid">
+              <label>
+                Competidora
+                <select value={competidorIdActivo} onChange={(e) => setCompetidorId(e.target.value)} required>
+                  {participantes.map((item) => <option key={item.id} value={item.id}>#{item.dorsal} {item.nombre}</option>)}
+                </select>
+              </label>
+              <label>
+                Bloque
+                <select value={boulderIdActivo} onChange={(e) => setBoulderId(e.target.value)} required>
+                  {boulders.map((id) => <option key={id} value={id}>{id}</option>)}
+                </select>
+              </label>
+            </div>
+            <p className="delegado-actual"><strong>Resultado actual:</strong> {resumenResultado(resultadoActual)}</p>
+          </>
+        )}
+
+        <label>
+          Argumento breve
+          <textarea
+            rows="5"
+            maxLength="500"
+            value={argumento}
+            onChange={(e) => setArgumento(e.target.value)}
+            placeholder={tipo === 'resultado'
+              ? 'Ej.: La competidora #4 obtuvo zona en el 4.º intento, no en el 6.º.'
+              : 'Ej.: La lluvia impidió condiciones aptas durante la segunda mitad de la competencia.'}
+            required
+          />
+          <small>{argumento.length}/500</small>
+        </label>
+        <div className="delegado-botones">
+          <button type="button" className="delegado-btn-secondary" onClick={guardar('borrador')} disabled={enviando || !competencia || !etapa}>
+            Guardar borrador
+          </button>
+          <button className="delegado-btn" disabled={enviando || !competencia || !etapa}>
+            {enviando ? 'Guardando…' : 'Enviar a evaluación'}
+          </button>
+          {editandoId && (
+            <button type="button" className="delegado-btn-secondary" onClick={() => { setEditandoId(null); setArgumento(''); }}>
+              Cancelar edición
+            </button>
+          )}
+        </div>
+      </form>
+
+      <section className="delegado-card">
+        <h2>Mis apelaciones</h2>
+        {apelaciones.length === 0 && <p>Todavía no presentaste apelaciones.</p>}
+        <div className="delegado-lista">
+          {apelaciones.map((item) => (
+            <article key={item.id} className="delegado-apelacion">
+              <div>
+                <strong>{item.tipo === 'resultado'
+                  ? `#${item.dorsal} ${item.competidorNombre} · ${item.boulderId}`
+                  : 'Situación general'}</strong>
+                <p>{item.argumento}</p>
+              </div>
+              <div className="delegado-apelacion-acciones">
+                <span className={`delegado-estado delegado-estado-${item.estado}`}>{ESTADOS[item.estado] || item.estado}</span>
+                {item.estado === 'borrador' && (
+                  <>
+                    <button type="button" className="delegado-btn-secondary" onClick={() => cargarBorrador(item)}>Editar</button>
+                    <button type="button" className="delegado-btn" onClick={() => enviarBorrador(item.id)}>Enviar a evaluación</button>
+                  </>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }
-
-export default DelegadoView

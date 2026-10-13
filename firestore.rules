@@ -1,32 +1,64 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read: if true;
-    }
-
     match /competencias/{competenciaId} {
+      allow read: if true;
       allow write: if request.auth != null;
 
       match /etapas/{etapaId} {
+        allow read: if true;
         allow write: if request.auth != null;
       }
 
       match /competidores/{competidorId} {
+        allow read: if true;
         allow write: if request.auth != null;
       }
 
       match /turnos/{turnoId} {
+        allow read: if true;
         allow write: if request.auth != null;
       }
     }
 
     match /resultados/{resultadoId} {
+      allow read: if true;
       allow write: if request.auth != null;
     }
 
     match /intentos/{intentoId} {
+      allow read: if true;
       allow write: if request.auth != null;
+    }
+
+    match /apelaciones/{apelacionId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.autorUid == request.auth.uid
+        && request.resource.data.estado in ['borrador', 'en_evaluacion']
+        && request.resource.data.argumento is string
+        && request.resource.data.argumento.size() >= 10
+        && request.resource.data.argumento.size() <= 500;
+
+      allow update: if request.auth != null && (
+        (
+          resource.data.autorUid == request.auth.uid
+          && resource.data.estado == 'borrador'
+          && request.resource.data.autorUid == resource.data.autorUid
+          && request.resource.data.estado in ['borrador', 'en_evaluacion']
+          && request.resource.data.argumento is string
+          && request.resource.data.argumento.size() >= 10
+          && request.resource.data.argumento.size() <= 500
+        )
+        || (
+          resource.data.estado == 'en_evaluacion'
+          && request.resource.data.estado in ['aceptada', 'rechazada']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'resueltaPor', 'resueltaEn'])
+        )
+      );
+
+      allow delete: if false;
     }
   }
 }

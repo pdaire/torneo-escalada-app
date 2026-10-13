@@ -1,0 +1,268 @@
+body.delegado-mode,
+body.delegado-mode #root {
+  width: 100%;
+  max-width: none;
+  border: 0;
+  background: #f3f4f6;
+  color: #1a1d23;
+  color-scheme: light;
+  text-align: left;
+}
+
+.delegado {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+  color: #1a1d23;
+}
+
+.delegado h1,
+.delegado h2 {
+  color: #1a1d23;
+}
+
+.delegado h1 {
+  margin: 0.1rem 0;
+  font-size: 2rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.delegado h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.delegado p {
+  margin: 0.2rem 0;
+}
+
+.delegado-login {
+  max-width: 420px;
+  padding-top: 3rem;
+}
+
+.delegado-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.delegado-kicker {
+  color: #1d4e89;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.delegado-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.delegado-actions a {
+  color: #1d4e89;
+  font-weight: 650;
+}
+
+.delegado-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1.1rem;
+  background: #fff;
+  border: 1px solid #d5d9e0;
+  border-radius: 12px;
+}
+
+.delegado-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 650;
+}
+
+.delegado input,
+.delegado select,
+.delegado textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.7rem 0.75rem;
+  color: #1a1d23;
+  background: #fff;
+  border: 1px solid #aeb5c0;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.delegado textarea {
+  resize: vertical;
+}
+
+.delegado input:focus,
+.delegado select:focus,
+.delegado textarea:focus {
+  outline: 2px solid #1d4e89;
+  outline-offset: 1px;
+}
+
+.delegado-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.delegado-tipos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.delegado-tipos legend {
+  width: 100%;
+  margin-bottom: 0.35rem;
+  font-weight: 700;
+}
+
+.delegado-tipos label {
+  flex-direction: row;
+  align-items: center;
+}
+
+.delegado-tipos input {
+  width: auto;
+  margin: 0;
+}
+
+.delegado-btn,
+.delegado-btn-secondary {
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.delegado-btn {
+  color: #fff;
+  background: #1a1d23;
+  border: 1px solid #1a1d23;
+}
+
+.delegado-btn-secondary {
+  color: #1a1d23;
+  background: #fff;
+  border: 1px solid #aeb5c0;
+}
+
+.delegado-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.delegado-error,
+.delegado-success {
+  margin-top: 1rem !important;
+  padding: 0.75rem 0.9rem;
+  border-radius: 8px;
+  font-weight: 650;
+}
+
+.delegado-error {
+  color: #8a1c13;
+  background: #fdecea;
+  border: 1px solid #f5c2c0;
+}
+
+.delegado-success {
+  color: #175b31;
+  background: #e7f6ec;
+  border: 1px solid #acd8ba;
+}
+
+.delegado-actual {
+  padding: 0.75rem;
+  color: #303640;
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.delegado-form small {
+  color: #68717d;
+  font-weight: 400;
+  text-align: right;
+}
+
+.delegado-lista {
+  display: flex;
+  flex-direction: column;
+}
+
+.delegado-apelacion {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid #e1e4e8;
+}
+
+.delegado-apelacion p {
+  margin-top: 0.25rem;
+  color: #4b535e;
+}
+
+.delegado-botones,
+.delegado-apelacion-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.delegado-estado {
+  align-self: flex-start;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: #eef1f4;
+  color: #3d4450;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.delegado-estado-en_evaluacion {
+  background: #fff3cd;
+  color: #6c5200;
+}
+
+.delegado-estado-aceptada {
+  background: #e7f6ec;
+  color: #175b31;
+}
+
+.delegado-estado-rechazada {
+  background: #fdecea;
+  color: #8a1c13;
+}
+
+@media (max-width: 600px) {
+  .delegado-header {
+    flex-direction: column;
+  }
+
+  .delegado-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .delegado-apelacion {
+    flex-direction: column;
+  }
+}

@@ -1,29 +1,25 @@
 /**
- * Motor de ordenamiento (Búlder)
- * Criterio de jerarquía estricta:
- * 1. Tops (T) -> Mayor a menor
- * 2. Zonas (z) -> Mayor a menor
- * 3. Intentos a Top (aT) -> Menor a mayor
- * 4. Intentos a Zona (aZ) -> Menor a mayor
+ * Puntuación de búlder (IFSC 2025)
+ * Por bloque:
+ * - Top en el intento N: 25 - 0.1 × (N - 1)
+ * - Zona en el intento N, sin top: 10 - 0.1 × (N - 1)
+ * - Sin zona ni top: 0
+ * El puntaje de la ronda es la suma de los bloques.
+ *
+ * Se calcula en décimas enteras para evitar errores de coma flotante.
  */
 
-export const sortScore = (a, b) => {
-    // 1. Desempate por Tops
-    if (b.T !== a.T) return b.T - a.T; 
-    
-    // 2. Desempate por Zonas
-    if (b.z !== a.z) return b.z - a.z; 
-    
-    // 3. Desempate por Intentos a Top (Quien usa MENOS intentos, es mejor)
-    const aT_val = a.T > 0 ? a.aT : 999;
-    const bT_val = b.T > 0 ? b.aT : 999;
-    if (aT_val !== bT_val) return aT_val - bT_val;
-    
-    // 4. Desempate por Intentos a Zona
-    const aZ_val = a.z > 0 ? a.aZ : 999;
-    const bZ_val = b.z > 0 ? b.aZ : 999;
-    if (aZ_val !== bZ_val) return aZ_val - bZ_val;
-    
-    // Empate absoluto
-    return 0; 
-};
+const TOP_DECIMAS = 250;
+const ZONA_DECIMAS = 100;
+
+export function decimasBoulder({ topEnIntento, zonaEnIntento } = {}) {
+  if (topEnIntento != null) return Math.max(0, TOP_DECIMAS - (topEnIntento - 1));
+  if (zonaEnIntento != null) return Math.max(0, ZONA_DECIMAS - (zonaEnIntento - 1));
+  return 0;
+}
+
+export function formatearPuntos(decimas) {
+  return (decimas / 10).toFixed(1);
+}
+
+export const sortScore = (a, b) => b.decimas - a.decimas;

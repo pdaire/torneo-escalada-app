@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { onSnapshot, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import {
   leerResultado,
@@ -47,6 +47,7 @@ export default function JuezView() {
   const [editando, setEditando] = useState(false);
   const [borrador, setBorrador] = useState(resultadoVacio());
   const [errorEdicion, setErrorEdicion] = useState('');
+  const [revisandoApelaciones, setRevisandoApelaciones] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   const scoreRef = useRef(resultadoVacio());
@@ -129,7 +130,13 @@ export default function JuezView() {
   };
 
   const persistir = async (next, contexto) => {
-    await setDoc(resultadoDocRef(db, contexto), {
+    const clave = {
+      competenciaId: contexto.competenciaId,
+      etapaId: contexto.etapaId,
+      competidorId: contexto.competidor.id,
+      boulderId: contexto.boulderId,
+    };
+    await setDoc(resultadoDocRef(db, clave), {
       competenciaId: contexto.competenciaId,
       etapaId: contexto.etapaId,
       competidorId: contexto.competidor.id,
@@ -381,7 +388,11 @@ export default function JuezView() {
 
       {!listo && <p style={{ textAlign: 'center' }}>Cargando resultado...</p>}
 
-      {listo && competidor && !editando && !buscando && (
+      {revisandoApelaciones && (
+        <ApelacionesJuez etapaId={etapa?.id} juezEmail={user.email} />
+      )}
+
+      {listo && competidor && !editando && !buscando && !revisandoApelaciones && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flexGrow: 1 }}>
           <button
             onClick={sumarIntento}
@@ -414,7 +425,7 @@ export default function JuezView() {
         </div>
       )}
 
-      {listo && editando && (
+      {listo && editando && !revisandoApelaciones && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', flexGrow: 1 }}>
           <Stepper etiqueta="Intentos totales" valor={borrador.intentos} onMenos={() => cambiarBorrador('intentos', -1)} onMas={() => cambiarBorrador('intentos', 1)} />
           <Stepper etiqueta="Zona en el intento" valor={borrador.zonaEnIntento} vacio="Sin zona" onMenos={() => cambiarBorrador('zonaEnIntento', -1)} onMas={() => cambiarBorrador('zonaEnIntento', 1)} />
@@ -436,9 +447,58 @@ export default function JuezView() {
         ) : (
           <button onClick={abrirEdicion} disabled={!listo || !competidor} style={{ padding: '1rem', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.2rem' }}>Editar</button>
         )}
+        <button onClick={() => setRevisandoApelaciones((abierta) => !abierta)} style={{ padding: '1rem', backgroundColor: revisandoApelaciones ? '#111' : '#fff', color: revisandoApelaciones ? '#fff' : '#111', border: '1px solid #111', borderRadius: '8px' }}>
+          {revisandoApelaciones ? 'Volver a puntuar' : 'Apelaciones'}
+        </button>
         <Link to="/admin" style={{ alignSelf: 'center' }}>Administrar</Link>
       </div>
     </div>
+  );
+}
+
+function ApelacionesJuez({ etapaId, juezEmail }) {
+  const [apelaciones, setApelaciones] = useState([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!etapaId) return undefined;
+    return onSnapshot(collection(db, 'apelaciones'), (snapshot) => {
+      setApelaciones(snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter((item) => item.etapaId === etapaId && item.estado === 'en_evaluacion'));
+    });
+  }, [etapaId]);
+
+  const resolver = async (id, estado) => {
+    setError('');
+    try {
+      await updateDoc(doc(db, 'apelaciones', id), {
+        estado,
+        resueltaPor: juezEmail,
+        resueltaEn: serverTimestamp(),
+      });
+    } catch {
+      setError('No se pudo resolver la apelación. Publica las reglas actualizadas.');
+    }
+  };
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <h2 style={{ margin: 0, color: '#111' }}>Apelaciones en evaluación</h2>
+      <p style={{ margin: 0, color: '#555' }}>Aceptar o rechazar no cambia el marcador. Si aceptas una corrección, anótala en la tablet.</p>
+      {error && <p style={{ margin: 0, color: '#dc3545', fontWeight: 'bold' }}>{error}</p>}
+      {apelaciones.length === 0 && <p style={{ margin: 0 }}>No hay apelaciones en evaluación.</p>}
+      {apelaciones.map((item) => (
+        <article key={item.id} style={{ backgroundColor: '#f7f7f7', borderRadius: '12px', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <strong>{item.tipo === 'resultado' ? `#${item.dorsal} ${item.competidorNombre} · ${item.boulderId}` : 'Situación general'}</strong>
+          <p style={{ margin: 0 }}>{item.argumento}</p>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={() => resolver(item.id, 'aceptada')} style={{ padding: '0.8rem 1rem', border: 'none', borderRadius: '8px', backgroundColor: '#28a745', color: '#fff', fontWeight: 'bold' }}>Aceptar</button>
+            <button onClick={() => resolver(item.id, 'rechazada')} style={{ padding: '0.8rem 1rem', border: 'none', borderRadius: '8px', backgroundColor: '#dc3545', color: '#fff', fontWeight: 'bold' }}>Rechazar</button>
+          </div>
+        </article>
+      ))}
+    </section>
   );
 }
 
