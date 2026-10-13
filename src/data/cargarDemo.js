@@ -28,7 +28,11 @@ export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () 
   });
   config.set(miembroRef(db, C, DEMO_JUEZ), {
     rol: 'juez', nombre: 'Juez demo', club: '',
-    asignaciones: { [ETAPA_ACTIVA]: ETAPAS[ETAPA_ACTIVA].boulders },
+    // Final: todos los bloques. Clasificatoria (ronda americana): sectores A y B.
+    asignaciones: {
+      [ETAPA_ACTIVA]: ETAPAS[ETAPA_ACTIVA].boulders,
+      clasificatoria: [...ETAPAS.clasificatoria.sectores.A, ...ETAPAS.clasificatoria.sectores.B],
+    },
   });
   config.set(miembroRef(db, C, DEMO_DELEGADO), { rol: 'delegado', nombre: 'Delegado demo', club: 'Club Demo', asignaciones: {} });
   if (correoAdmin !== DEMO_JUEZ && correoAdmin !== DEMO_DELEGADO) {
@@ -68,10 +72,14 @@ export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () 
   });
   resultados.forEach((item) => porId.set(idResultado({ competenciaId: C, ...item }), item));
 
-  // Un batch por competidora y etapa: las reglas leen pocos documentos por batch.
+  // Batches por competidora y etapa, de hasta 8 resultados: las reglas pueden leer
+  // como máximo 20 documentos por batch (miembro, etapa, competidora y cada resultado).
   const grupos = new Map();
   porId.forEach((item, id) => {
-    const grupo = `${item.etapaId}/${item.competidorId}`;
+    const base = `${item.etapaId}/${item.competidorId}`;
+    let parte = 0;
+    while ((grupos.get(`${base}/${parte}`) || []).length >= 8) parte += 1;
+    const grupo = `${base}/${parte}`;
     if (!grupos.has(grupo)) grupos.set(grupo, []);
     grupos.get(grupo).push([id, item]);
   });

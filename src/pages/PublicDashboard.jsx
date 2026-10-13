@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { formatearPuntos } from '../utils/score';
+import { esAmericana, formatearPuntaje, puntosDeBloque, reglasAmericana } from '../utils/score';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
 import { useRankingEtapa } from '../hooks/useResultados';
 import { bloquesDeCategoria, cambiosEntre, estadoCategoria, firmasDeRanking, ordenarEtapas } from '../utils/ranking';
@@ -95,8 +95,39 @@ function PestanasEtapas({ etapas, seleccionada, onElegir }) {
   );
 }
 
+// Ronda americana: en vez de una columna por bloque (pueden ser 30 o más),
+// los bloques que suman, la cantidad de tops y el total.
+function FilasAmericana({ grupo, etapa, destellos }) {
+  return grupo.filas.map((comp) => (
+    <tr key={comp.id} className={destellos.has(comp.id) ? 'fila-destello' : undefined}>
+      <td className={comp.posicion === 1 && comp.puntaje > 0 ? 'pos oro' : 'pos'}>{comp.posicion}°</td>
+      <td className="nombre">
+        <Link to={`/competidor/${comp.id}`}>
+          {comp.dorsal && <span className="dorsal">#{comp.dorsal} </span>}
+          {comp.nombre}
+        </Link>
+      </td>
+      <td className="bloques-suman">
+        {comp.cuentan.map((boulderId) => (
+          <span key={`${boulderId}-${destellos.get(`${comp.id}/${boulderId}`) || ''}`} className={destellos.has(`${comp.id}/${boulderId}`) ? 'bloque-suma celda-destello' : 'bloque-suma'}>
+            {boulderId} <strong>{puntosDeBloque(etapa, boulderId, comp.boulders[boulderId])}</strong>
+          </span>
+        ))}
+        {!comp.cuentan.length && <span className="dorsal">–</span>}
+      </td>
+      <td>{comp.tops}</td>
+      <td className="puntaje">
+        <span key={destellos.get(comp.id) || 'quieto'} className={destellos.has(comp.id) ? 'puntaje-destello' : undefined}>
+          {formatearPuntaje(etapa, comp.puntaje)}
+        </span>
+      </td>
+    </tr>
+  ));
+}
+
 function TablaCategoria({ grupo, etapa, turnos, conTitulo, destellos }) {
-  const bloques = bloquesVisibles(grupo, etapa, turnos);
+  const americana = esAmericana(etapa);
+  const bloques = americana ? [] : bloquesVisibles(grupo, etapa, turnos);
   return (
     <section className="categoria">
       {conTitulo && (
@@ -111,14 +142,17 @@ function TablaCategoria({ grupo, etapa, turnos, conTitulo, destellos }) {
             <tr>
               <th>Pos</th>
               <th className="nombre">Escalador</th>
+              {americana && <th className="bloques-suman">Suman ({reglasAmericana(etapa).mejoresBloques} mejores)</th>}
+              {americana && <th>Tops</th>}
               {bloques.map((boulder) => <th key={boulder}>{boulder}</th>)}
               <th className="puntaje">Puntaje</th>
             </tr>
           </thead>
           <tbody>
-            {grupo.filas.map((comp) => (
+            {americana && <FilasAmericana grupo={grupo} etapa={etapa} destellos={destellos} />}
+            {!americana && grupo.filas.map((comp) => (
               <tr key={comp.id} className={destellos.has(comp.id) ? 'fila-destello' : undefined}>
-                <td className={comp.posicion === 1 && comp.decimas > 0 ? 'pos oro' : 'pos'}>{comp.posicion}°</td>
+                <td className={comp.posicion === 1 && comp.puntaje > 0 ? 'pos oro' : 'pos'}>{comp.posicion}°</td>
                 <td className="nombre">
                   <Link to={`/competidor/${comp.id}`}>
                     {comp.dorsal && <span className="dorsal">#{comp.dorsal} </span>}
@@ -137,7 +171,7 @@ function TablaCategoria({ grupo, etapa, turnos, conTitulo, destellos }) {
                 })}
                 <td className="puntaje">
                   <span key={destellos.get(comp.id) || 'quieto'} className={destellos.has(comp.id) ? 'puntaje-destello' : undefined}>
-                    {formatearPuntos(comp.decimas)}
+                    {formatearPuntaje(etapa, comp.puntaje)}
                   </span>
                 </td>
               </tr>
@@ -153,7 +187,7 @@ export default function PublicDashboard() {
   const { competencia, etapa: etapaActiva, etapas, competidores, turnos, cargando } = useEtapaActiva();
   const [parametros, setParametros] = useSearchParams();
   const etapa = etapas.find((item) => item.id === parametros.get('etapa')) || etapaActiva;
-  const { grupos, error: errorCarga, cargando: cargandoResultados } = useRankingEtapa({ competencia, etapa, competidores, turnos });
+  const { grupos, error: errorCarga, cargando: cargandoResultados } = useRankingEtapa({ competencia, etapa, etapas, competidores, turnos });
   const destellos = useDestellos(grupos, `${competencia?.id}/${etapa?.id}`, !cargando && !cargandoResultados);
 
   useEffect(() => {

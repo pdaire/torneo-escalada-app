@@ -1,5 +1,9 @@
 # Puntuación
 
+Cada etapa tiene un formato: **World Climbing** (sistema de puntos IFSC 2025) o **ronda americana**. Ver [Ronda americana](#ronda-americana) al final.
+
+## World Climbing
+
 Se usa el sistema de puntos de búlder de la IFSC (2025). La fórmula está en `src/utils/score.js`, el ranking en `src/utils/ranking.js` y la validación en `src/utils/resultado.js`. Los tres tienen tests.
 
 ## Puntos por bloque
@@ -57,3 +61,42 @@ En cada bloque hay un rectángulo y dos números:
 `T 4` y `z 2` significan top en el intento 4 y zona en el intento 2. `–` significa que todavía no se consiguió.
 
 La última columna es el puntaje de la ronda con un decimal.
+
+## Ronda americana
+
+Formato masivo y dinámico, típico de campeonatos amateur o de clasificatorias: todas escalan al mismo tiempo en distintos bloques del muro. Los bloques van numerados por dificultad (B1 el más fácil).
+
+### Puntos
+
+| Regla | Valor por defecto |
+| --- | --- |
+| B1 encadenado al 1.er intento | 10 |
+| Cada bloque siguiente vale | 2 más |
+| Cada intento fallido descuenta | 2 |
+| Máximo de intentos por bloque | 5 |
+| Bloques que suman al total | los 5 mejores |
+
+Bloque N encadenado en el intento k: `10 + 2 × (N − 1) − 2 × (k − 1)`. Con 24 bloques queda la cartilla de siempre:
+
+| Bloque | 1 | 2 | 3 | 4 | 5 |
+| --- | --- | --- | --- | --- | --- |
+| B1 | 10 | 8 | 6 | 4 | 2 |
+| B2 | 12 | 10 | 8 | 6 | 4 |
+| … | | | | | |
+| B24 | 56 | 54 | 52 | 50 | 48 |
+
+No hay zonas: solo cuenta encadenar. Sin encadenar en los 5 intentos, el bloque vale 0. Los cinco valores de la tabla se configuran en cada etapa.
+
+El total es la suma de los 5 bloques con más puntos. Los empates comparten posición; si la etapa tiene etapa previa, desempata la posición en ella.
+
+### Cómo anota el juez
+
+| Acción | Qué guarda |
+| --- | --- |
+| ✗ Falló | Suma un intento sin encadenar. |
+| ✓ Encadenó | Suma un intento y lo marca como encadenado. |
+| Deshacer | Quita el último intento (y el encadenado, si lo había). |
+
+Con el bloque encadenado o con los 5 intentos usados, ✗ y ✓ quedan deshabilitados. Las reglas de Firestore rechazan más intentos que el máximo y un encadenado que no sea el último intento.
+
+El cálculo está en `src/utils/score.js` (`puntosAmericana`, `puntajeDeEtapa`).

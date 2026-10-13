@@ -71,6 +71,13 @@ service cloud.firestore {
         && (d.topEnIntento == null || (d.zonaEnIntento != null && d.zonaEnIntento <= d.topEnIntento));
     }
 
+    // Ronda americana: hasta `maxIntentos` intentos y, si encadenó, ese fue el último intento.
+    function reglasDeFormato(etapa, d) {
+      return etapa.get('formato', 'wc') != 'americana'
+        || (d.intentos <= etapa.get('maxIntentos', 5)
+          && (d.topEnIntento == null || d.topEnIntento == d.intentos));
+    }
+
     function escrituraResultado(id, d) {
       let campos = ['competenciaId', 'etapaId', 'competidorId', 'boulderId',
         'intentos', 'zonaEnIntento', 'topEnIntento', 'version', 'actualizadoPor', 'actualizadoEn'];
@@ -84,6 +91,7 @@ service cloud.firestore {
         && d.actualizadoEn == request.time
         && etapaAbierta(d.competenciaId, d.etapaId)
         && d.boulderId in get(rutaEtapa(d.competenciaId, d.etapaId)).data.boulders
+        && reglasDeFormato(get(rutaEtapa(d.competenciaId, d.etapaId)).data, d)
         && exists(rutaCompetidor(d.competenciaId, d.competidorId))
         && !(get(rutaCompetidor(d.competenciaId, d.competidorId)).data.get('categoriaId', '')
           in get(rutaEtapa(d.competenciaId, d.etapaId)).data.get('categoriasCerradas', []))
@@ -143,7 +151,8 @@ service cloud.firestore {
         allow read: if true;
         allow write: if esAdmin()
           && request.resource.data.get('estado', 'abierta') in ['abierta', 'cerrada']
-          && request.resource.data.get('categoriasCerradas', []) is list;
+          && request.resource.data.get('categoriasCerradas', []) is list
+          && request.resource.data.get('formato', 'wc') in ['wc', 'americana'];
         allow delete: if esAdmin();
       }
 

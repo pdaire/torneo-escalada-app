@@ -89,6 +89,8 @@ npm test             # puntaje, validación y ranking
 npm run test:rules   # reglas de Firestore en el emulador
 ```
 
+`test:rules` usa su propia configuración (`firebase.pruebas.json`, Firestore en el puerto 8180), así que se puede correr con `demo:local` abierto. La app acepta `VITE_PUERTO_FIRESTORE` y `VITE_PUERTO_AUTH` para conectarse a emuladores en otros puertos.
+
 `test:rules` y `demo:local` necesitan Java: `brew install openjdk`. Los scripts ya agregan el Java de Homebrew al PATH y usan los certificados del sistema (`NODE_OPTIONS=--use-system-ca`), así que no hay que configurar nada más. Usan el proyecto de prueba `demo-torneo` y no tocan datos reales.
 
 GitHub Actions corre `npm test` antes de cada build.

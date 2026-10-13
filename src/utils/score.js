@@ -21,3 +21,67 @@ export function decimasBoulder({ topEnIntento, zonaEnIntento } = {}) {
 export function formatearPuntos(decimas) {
   return (decimas / 10).toFixed(1);
 }
+
+/**
+ * Ronda americana
+ * Bloques numerados por dificultad (B1 el más fácil). Sin zonas: solo cuenta encadenar.
+ * - Bloque N encadenado en el intento k: base + incremento × (N - 1) - descuento × (k - 1)
+ *   Con los valores por defecto, B1 vale 10, 8, 6, 4, 2 y B24 vale 56, 54, 52, 50, 48.
+ * - Máximo de intentos por bloque (5): después ya no puntúa.
+ * - El total es la suma de los mejores bloques (5).
+ * Los puntos son enteros: no hace falta trabajar en décimas.
+ */
+
+export const FORMATOS = {
+  wc: 'World Climbing',
+  americana: 'Ronda americana',
+};
+
+export const AMERICANA_POR_DEFECTO = {
+  puntajeBase: 10,
+  incrementoPorBloque: 2,
+  descuentoPorIntento: 2,
+  maxIntentos: 5,
+  mejoresBloques: 5,
+};
+
+export function esAmericana(etapa) {
+  return etapa?.formato === 'americana';
+}
+
+export function reglasAmericana(etapa) {
+  return Object.fromEntries(Object.entries(AMERICANA_POR_DEFECTO)
+    .map(([clave, valor]) => [clave, Number.isFinite(etapa?.[clave]) ? etapa[clave] : valor]));
+}
+
+// Puntos de encadenar el bloque en el intento `intento` (sin importar si ya pasó).
+export function puntosAmericana(etapa, boulderId, intento) {
+  const numero = (etapa?.boulders || []).indexOf(boulderId) + 1;
+  const reglas = reglasAmericana(etapa);
+  if (numero < 1 || intento < 1 || intento > reglas.maxIntentos) return 0;
+  return Math.max(0, reglas.puntajeBase + (reglas.incrementoPorBloque * (numero - 1)) - (reglas.descuentoPorIntento * (intento - 1)));
+}
+
+// Puntos de un bloque en la unidad de su formato (décimas en World Climbing).
+export function puntosDeBloque(etapa, boulderId, marca = {}) {
+  if (!esAmericana(etapa)) return decimasBoulder(marca);
+  return marca.topEnIntento == null ? 0 : puntosAmericana(etapa, boulderId, marca.topEnIntento);
+}
+
+// Puntaje de la etapa a partir de los bloques { boulderId: marca }.
+// `cuentan`: bloques que suman (en la americana, solo los mejores).
+export function puntajeDeEtapa(etapa, boulders) {
+  const puntos = Object.entries(boulders).map(([boulderId, marca]) => ({ boulderId, puntos: puntosDeBloque(etapa, boulderId, marca) }));
+  if (!esAmericana(etapa)) {
+    return { puntaje: puntos.reduce((total, b) => total + b.puntos, 0), cuentan: puntos.map((b) => b.boulderId) };
+  }
+  const mejores = puntos
+    .filter((b) => b.puntos > 0)
+    .sort((a, b) => b.puntos - a.puntos || a.boulderId.localeCompare(b.boulderId, undefined, { numeric: true }))
+    .slice(0, reglasAmericana(etapa).mejoresBloques);
+  return { puntaje: mejores.reduce((total, b) => total + b.puntos, 0), cuentan: mejores.map((b) => b.boulderId) };
+}
+
+export function formatearPuntaje(etapa, puntaje) {
+  return esAmericana(etapa) ? String(puntaje) : formatearPuntos(puntaje);
+}

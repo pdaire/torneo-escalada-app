@@ -20,3 +20,38 @@ describe('decimasBoulder', () => {
     expect(formatearPuntos(247 + 98)).toBe('34.5');
   });
 });
+
+describe('ronda americana', async () => {
+  const { puntosAmericana, puntajeDeEtapa, formatearPuntaje, reglasAmericana } = await import('./score');
+  const etapa = { formato: 'americana', boulders: Array.from({ length: 24 }, (_, i) => `B${i + 1}`) };
+
+  it('reproduce la cartilla: B1 = 10 8 6 4 2, B13 = 34 … 26, B24 = 56 … 48', () => {
+    expect([1, 2, 3, 4, 5].map((k) => puntosAmericana(etapa, 'B1', k))).toEqual([10, 8, 6, 4, 2]);
+    expect([1, 2, 3, 4, 5].map((k) => puntosAmericana(etapa, 'B13', k))).toEqual([34, 32, 30, 28, 26]);
+    expect([1, 2, 3, 4, 5].map((k) => puntosAmericana(etapa, 'B24', k))).toEqual([56, 54, 52, 50, 48]);
+  });
+
+  it('pasado el máximo de intentos no puntúa', () => {
+    expect(puntosAmericana(etapa, 'B24', 6)).toBe(0);
+  });
+
+  it('suma solo los 5 mejores bloques encadenados', () => {
+    const marcas = Object.fromEntries(['B1', 'B5', 'B9', 'B12', 'B20', 'B23', 'B24'].map((id) => [id, { topEnIntento: 1 }]));
+    marcas.B2 = { topEnIntento: null, intentos: 5 };
+    const { puntaje, cuentan } = puntajeDeEtapa(etapa, marcas);
+    expect(cuentan).toEqual(['B24', 'B23', 'B20', 'B12', 'B9']);
+    expect(puntaje).toBe(56 + 54 + 48 + 32 + 26);
+    expect(formatearPuntaje(etapa, puntaje)).toBe('216');
+  });
+
+  it('usa los valores configurados en la etapa', () => {
+    const otra = { ...etapa, puntajeBase: 100, incrementoPorBloque: 10, descuentoPorIntento: 5, mejoresBloques: 3 };
+    expect(puntosAmericana(otra, 'B2', 3)).toBe(100);
+    expect(reglasAmericana(otra).mejoresBloques).toBe(3);
+  });
+
+  it('World Climbing sigue sumando todos los bloques en décimas', () => {
+    const wc = { formato: 'wc', boulders: ['W1', 'W2'] };
+    expect(puntajeDeEtapa(wc, { W1: { topEnIntento: 1, zonaEnIntento: 1 }, W2: { zonaEnIntento: 2 } }).puntaje).toBe(250 + 99);
+  });
+});

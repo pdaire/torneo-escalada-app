@@ -31,7 +31,9 @@ Hay una tabla por categoría. La etiqueta de cada una indica:
 
 El encabezado sigue la misma lógica: **En vivo** en la etapa activa, **Resultados finales** en una etapa cerrada. Las categorías en curso van primero. Cada tabla lista a todas las competidoras que tienen un turno en esa etapa, aunque todavía no tengan puntaje, y muestra solo los bloques de esa categoría.
 
-Cada bloque muestra, como en las transmisiones de la IFSC, un rectángulo vacío, medio lleno o lleno según no haya zona, haya zona o haya top. Al lado van dos números:
+En una **ronda americana** la tabla no tiene una columna por bloque: muestra los bloques que suman (los 5 mejores, con sus puntos), la cantidad de tops y el total.
+
+En World Climbing, cada bloque muestra, como en las transmisiones de la IFSC, un rectángulo vacío, medio lleno o lleno según no haya zona, haya zona o haya top. Al lado van dos números:
 
 - `T` es el intento en que se hizo el top.
 - `z` es el intento en que se hizo la zona.
@@ -51,6 +53,8 @@ Una tarjeta por etapa en que participa, en orden de competencia, con:
 - si la categoría está en curso o finalizada en esa etapa;
 - cada bloque con el intento de la zona, el del top, los intentos totales y los puntos;
 - los bloques que todavía no escala, con su hora programada.
+
+En una ronda americana muestra solo los bloques intentados, con sus intentos, si encadenó y los puntos; los que suman al total van marcados con ★.
 
 El nombre de la etapa lleva a esa pestaña del tablero, filtrada por su categoría.
 
@@ -74,6 +78,16 @@ La tablet anota solo en la etapa activa. No se cambia de etapa desde aquí: la e
 
 Sin una etapa activa, la pantalla pide ir a administrar.
 
+### Ronda americana: cartilla digital
+
+Si la etapa activa es una ronda americana, la tablet muestra la cartilla del competidor en vez del orden de paso:
+
+1. Arriba, los sectores del juez (por ejemplo **Sector A** B1 B5 B9 B13 B17 B21). Se elige uno.
+2. Se escribe el dorsal y se abre la ficha de la competidora. Las últimas fichas abiertas quedan a mano para volver rápido.
+3. Por cada bloque del sector aparece la fila de la cartilla con el valor de cada intento: los fallidos quedan tachados, el encadenado en verde y el siguiente intento con borde.
+4. **✗ Falló**, **✓ Encadenó** y **Deshacer** anotan como en papel. Arriba se ve el total de los 5 mejores, que se actualiza al instante; los bloques que suman van con borde verde.
+5. **Ver ficha completa** muestra todos los bloques que ya intentó, incluidos los de otros sectores.
+
 ### Instalar la app del juez
 
 Abrir https://torneo-escalada-app.web.app/juez y:
@@ -91,10 +105,14 @@ Solo para cuentas que están en `admins`.
 
 1. Crear una competencia, o cargar la competencia demo (ver abajo). En desarrollo (`npm run dev`) también se puede cargar el ejemplo Baguales 2026.
 2. Marcar una competencia como activa. Solo una queda activa.
-3. Agregar etapas (qualis, semifinal, final), sus bloques, la duración del turno y, si corresponde, la etapa previa. Marcar una como activa. **Cerrar** bloquea los resultados de la etapa. En una etapa abierta, cada categoría se puede **finalizar** por separado.
+3. Agregar etapas (qualis, semifinal, final) con su formato y, si corresponde, la etapa previa.
+   - **World Climbing:** bloques (por ejemplo W1–W4, M1–M4) y duración del turno.
+   - **Ronda americana:** cantidad de bloques (B1…BN), tabla de puntos (B1 al primer intento, + por bloque, − por intento), máximo de intentos, cuántos bloques suman y sectores (`A: 1, 8, 23, 32; B: 2, 9, 16`). Los sectores se pueden editar después con **Sectores**. No tiene orden de paso.
+
+    Marcar una como activa. **Cerrar** bloquea los resultados de la etapa. En una etapa abierta, cada categoría se puede **finalizar** por separado.
 4. Cargar competidores uno a uno o con CSV `dorsal,nombre,categoria`. Una competidora con resultados no se puede quitar.
 5. Generar el orden de paso por etapa, categoría y bloques marcados. Con una etapa previa, se puede generar con sus primeras N clasificadas, en orden inverso al ranking. Reordenarlo con Subir y Bajar.
-6. Agregar jueces, juez jefe y delegados por correo. Asignar a cada juez uno o más bloques por etapa.
+6. Agregar jueces, juez jefe y delegados por correo. Asignar a cada juez uno o más bloques por etapa; en una ronda americana con sectores, se asignan sectores.
 
 ### Competencia demo
 
@@ -105,12 +123,12 @@ Solo para cuentas que están en `admins`.
 
   | Ronda | Bloques por categoría | Pasan | Estado |
   | --- | --- | --- | --- |
-  | Clasificatoria | 6 (W1–W6, M1–M6) | las 12 | Cerrada |
+  | Clasificatoria (ronda americana) | 24 compartidos (B1–B24), sectores A–D | las 12 | Cerrada |
   | Semifinal | 5 (W1–W5, M1–M5) | 8 | Cerrada |
   | Final | 4 (W1–W4, M1–M4) | 6 | Activa |
 
 - En la final, todas las categorías están finalizadas salvo Mujeres Adultas, que está a medias: cada finalista va en un bloque distinto y la última todavía no parte. Los empates de la final se desempatan con la semifinal.
-- `pdaire+juez1@gmail.com` es juez de los ocho bloques de la final. `pdaire+delegado1@gmail.com` es delegado de "Club Demo". Quien carga la demo queda como juez jefe.
+- `pdaire+juez1@gmail.com` es juez de los ocho bloques de la final y de los sectores A y B de la clasificatoria. Para mostrar la cartilla americana, en `/admin` activa la clasificatoria y reábrela. `pdaire+delegado1@gmail.com` es delegado de "Club Demo". Quien carga la demo queda como juez jefe.
 
 Volver a cargarla la reinicia: los resultados anotados durante una demo vuelven a su valor inicial. Las apelaciones presentadas no se borran.
 

@@ -107,6 +107,17 @@ describe('resultados', () => {
     await denegado(guardarResultado(usuario('jefe@club.cl'), clave, marcador(1), 'intento', 'jefe@club.cl'));
   });
 
+  it('ronda americana: máximo de intentos y top en el último intento', async () => {
+    await setDoc(doc(sinReglas(), `competencias/${C}/etapas/final`), {
+      nombre: 'Final', boulders: ['M1', 'M2'], activa: true, estado: 'abierta', formato: 'americana', maxIntentos: 5,
+    });
+    const jefe = usuario('jefe@club.cl');
+    await denegado(guardarResultado(jefe, clave, marcador(1, { intentos: 6 }), 'intento', 'jefe@club.cl'));
+    await denegado(guardarResultado(jefe, clave, marcador(1, { intentos: 3, zonaEnIntento: 2, topEnIntento: 2 }), 'top', 'jefe@club.cl'));
+    await permitido(guardarResultado(jefe, clave, marcador(1, { intentos: 5 }), 'intento', 'jefe@club.cl'));
+    await permitido(guardarResultado(jefe, clave, marcador(2, { intentos: 5, zonaEnIntento: 5, topEnIntento: 5 }), 'top', 'jefe@club.cl'));
+  });
+
   it('el historial no se edita ni se escribe suelto', async () => {
     const juez = usuario('juez@club.cl');
     await permitido(guardarResultado(juez, clave, marcador(1), 'intento', 'juez@club.cl'));

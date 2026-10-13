@@ -14,6 +14,8 @@ import {
 } from '../utils/resultado';
 import { apelacionesCol } from '../utils/competicion';
 import { categoriasDeBloque } from '../utils/ranking';
+import { esAmericana } from '../utils/score';
+import JuezAmericana from './JuezAmericana';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
 import { useMiembro, useUsuario } from '../hooks/useSesion';
 
@@ -334,6 +336,33 @@ export default function JuezView() {
         <p>Pide a la organización que te asigne uno o más bloques.</p>
         <button onClick={() => signOut(auth)} style={{ padding: '1rem', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px' }}>Cerrar sesión</button>
       </main>
+    );
+  }
+
+  if (esAmericana(etapa)) {
+    return (
+      <JuezAmericana
+        competencia={competencia}
+        etapa={etapa}
+        competidores={competidores}
+        boulders={boulders}
+        correo={correo}
+        esJuezJefe={esJuezJefe}
+        pie={(
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {revisandoApelaciones && (
+              <ApelacionesJuez competenciaId={competencia.id} etapaId={etapa.id} juezEmail={correo} puedeResolver={esJuezJefe} />
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+              <button onClick={() => signOut(auth)} style={{ padding: '0.9rem', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '8px' }}>Cerrar sesión</button>
+              <button onClick={() => setRevisandoApelaciones((abierta) => !abierta)} style={{ padding: '0.9rem', backgroundColor: '#fff', color: '#111', border: '1px solid #111', borderRadius: '8px' }}>
+                {revisandoApelaciones ? 'Ocultar apelaciones' : 'Apelaciones'}
+              </button>
+              <Link to="/admin">Administrar</Link>
+            </div>
+          </div>
+        )}
+      />
     );
   }
 

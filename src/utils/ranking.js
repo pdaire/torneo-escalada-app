@@ -1,4 +1,4 @@
-import { decimasBoulder } from './score';
+import { puntajeDeEtapa, puntosDeBloque } from './score';
 
 function compararPrevia(a, b) {
   if (a.previa === b.previa) return 0;
@@ -16,12 +16,12 @@ function compararDorsal(a, b) {
 // (countback). Si sigue empatado, se comparte la posición.
 export function ordenarFilas(filas) {
   const ordenadas = filas.slice().sort((a, b) => (
-    b.decimas - a.decimas || compararPrevia(a, b) || compararDorsal(a, b)
+    b.puntaje - a.puntaje || compararPrevia(a, b) || compararDorsal(a, b)
   ));
   let posicion = 0;
   return ordenadas.map((fila, index) => {
     const anterior = ordenadas[index - 1];
-    if (!anterior || anterior.decimas !== fila.decimas || compararPrevia(anterior, fila) !== 0) {
+    if (!anterior || anterior.puntaje !== fila.puntaje || compararPrevia(anterior, fila) !== 0) {
       posicion = index + 1;
     }
     return { ...fila, posicion };
@@ -30,8 +30,11 @@ export function ordenarFilas(filas) {
 
 // Ranking de una etapa separado por categoría.
 // Participan quienes tienen turno en la etapa o algún resultado en ella.
-// Si la etapa no tiene turnos, participan todas las competidoras.
-export function rankingPorCategoria({ competidores, turnos, resultados, etapaId, posicionesPrevias = new Map() }) {
+// Si la etapa no tiene turnos (por ejemplo, una ronda americana), participan todas.
+// `puntaje` va en la unidad del formato de la etapa (ver puntajeDeEtapa);
+// sin `etapa`, se puntúa como World Climbing.
+export function rankingPorCategoria({ competidores, turnos, resultados, etapa, etapaId = etapa?.id, posicionesPrevias = new Map() }) {
+  const etapaPuntaje = etapa || { id: etapaId };
   const enTurnos = new Set(turnos.filter((t) => t.etapaId === etapaId).map((t) => t.competidorId));
   const resultadosEtapa = resultados.filter((r) => r.etapaId === etapaId);
   const conResultado = new Set(resultadosEtapa.map((r) => r.competidorId));
@@ -43,6 +46,7 @@ export function rankingPorCategoria({ competidores, turnos, resultados, etapaId,
   resultadosEtapa.forEach((r) => {
     bouldersPorCompetidor[r.competidorId] ||= {};
     bouldersPorCompetidor[r.competidorId][r.boulderId] = {
+      intentos: r.intentos ?? 0,
       zonaEnIntento: r.zonaEnIntento ?? null,
       topEnIntento: r.topEnIntento ?? null,
     };
@@ -55,6 +59,7 @@ export function rankingPorCategoria({ competidores, turnos, resultados, etapaId,
       grupos.set(categoriaId, { categoriaId, categoria: competidor.categoria || 'Sin categoría', filas: [] });
     }
     const boulders = bouldersPorCompetidor[competidor.id] || {};
+    const { puntaje, cuentan } = puntajeDeEtapa(etapaPuntaje, boulders);
     grupos.get(categoriaId).filas.push({
       id: competidor.id,
       nombre: competidor.nombre,
@@ -62,7 +67,9 @@ export function rankingPorCategoria({ competidores, turnos, resultados, etapaId,
       categoria: competidor.categoria,
       categoriaId,
       boulders,
-      decimas: Object.values(boulders).reduce((total, b) => total + decimasBoulder(b), 0),
+      puntaje,
+      cuentan,
+      tops: Object.values(boulders).filter((b) => b.topEnIntento != null).length,
       previa: posicionesPrevias.get(competidor.id) ?? null,
     });
   });
@@ -121,18 +128,22 @@ export function ordenarEtapas(etapas) {
 }
 
 // Ranking de una etapa con desempate por la etapa previa.
-// `resultados` puede traer resultados de varias etapas.
-export function rankingConDesempate({ etapa, competidores, turnos, resultados }) {
-  const posicionesPrevias = etapa.etapaPreviaId
-    ? posicionesDeRanking(rankingPorCategoria({ competidores, turnos, resultados, etapaId: etapa.etapaPreviaId }))
+// `resultados` puede traer resultados de varias etapas; `etapas` sirve para
+// puntuar la etapa previa con su propio formato.
+export function rankingConDesempate({ etapa, etapas = [], competidores, turnos, resultados }) {
+  const previa = etapa.etapaPreviaId
+    ? etapas.find((item) => item.id === etapa.etapaPreviaId) || { id: etapa.etapaPreviaId }
+    : null;
+  const posicionesPrevias = previa
+    ? posicionesDeRanking(rankingPorCategoria({ competidores, turnos, resultados, etapa: previa }))
     : new Map();
-  return rankingPorCategoria({ competidores, turnos, resultados, etapaId: etapa.id, posicionesPrevias });
+  return rankingPorCategoria({ competidores, turnos, resultados, etapa, posicionesPrevias });
 }
 
 // Todo lo de una competidora en la competencia, etapa por etapa.
 export function detalleCompetidor({ competidorId, etapas, competidores, turnos, resultados }) {
   return ordenarEtapas(etapas).flatMap((etapa) => {
-    const grupos = rankingConDesempate({ etapa, competidores, turnos, resultados });
+    const grupos = rankingConDesempate({ etapa, etapas, competidores, turnos, resultados });
     const grupo = grupos.find((item) => item.filas.some((fila) => fila.id === competidorId));
     if (!grupo) return [];
     const fila = grupo.filas.find((item) => item.id === competidorId);
@@ -151,7 +162,8 @@ export function detalleCompetidor({ competidorId, etapas, competidores, turnos, 
       return {
         boulderId,
         ...marcador,
-        decimas: decimasBoulder(marcador),
+        puntos: puntosDeBloque(etapa, boulderId, marcador),
+        cuenta: fila.cuentan.includes(boulderId),
         horaProgramada: turno?.horaProgramada || null,
         pendiente: !resultado || resultado.intentos === 0,
       };
@@ -159,7 +171,8 @@ export function detalleCompetidor({ competidorId, etapas, competidores, turnos, 
     return [{
       etapa,
       posicion: fila.posicion,
-      decimas: fila.decimas,
+      puntaje: fila.puntaje,
+      tops: fila.tops,
       totalCategoria: grupo.filas.length,
       categoriaId: grupo.categoriaId,
       estado: estadoCategoria(etapa, grupo.categoriaId),
@@ -189,7 +202,7 @@ export function categoriasDeBloque(etapa, turnos, competidores, boulderId) {
 export function firmasDeRanking(grupos) {
   const firmas = new Map();
   grupos.forEach((grupo) => grupo.filas.forEach((fila) => {
-    firmas.set(fila.id, String(fila.decimas));
+    firmas.set(fila.id, String(fila.puntaje));
     Object.entries(fila.boulders).forEach(([boulderId, marca]) => {
       if (marca.zonaEnIntento == null && marca.topEnIntento == null) return;
       firmas.set(`${fila.id}/${boulderId}`, `${marca.zonaEnIntento}|${marca.topEnIntento}`);

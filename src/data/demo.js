@@ -1,8 +1,10 @@
-// Competencia de demostración: seis categorías, clasificatoria y semifinal cerradas,
-// final en curso en Mujeres Adultas.
+// Competencia de demostración: seis categorías, clasificatoria en ronda americana y
+// semifinal cerradas, final (World Climbing) en curso en Mujeres Adultas.
 // Todo es determinístico: cargar la demo dos veces produce los mismos resultados.
 import { ordenDeSalida, posicionesDeRanking, rankingPorCategoria } from '../utils/ranking';
 import { sumarMinutos } from '../utils/competicion';
+import { AMERICANA_POR_DEFECTO } from '../utils/score';
+import { bloquesAmericana } from '../utils/sectores';
 
 export const DEMO_ID = 'demo';
 export const DEMO_JUEZ = 'pdaire+juez1@gmail.com';
@@ -54,8 +56,8 @@ const CATEGORIAS = [
 // En orden de competencia. `cupos`: cuántas por categoría entran a la etapa (null = todas).
 const RONDAS = [
   {
-    id: 'clasificatoria', nombre: 'Clasificatoria', tipo: 'qualis', bloquesPorCategoria: 6,
-    duracionTurno: 5, etapaPreviaId: null, cupos: null, inicio: '09:00', separacionCategorias: 60,
+    id: 'clasificatoria', nombre: 'Clasificatoria', tipo: 'qualis', formato: 'americana', bloquesAmericana: 24,
+    etapaPreviaId: null, cupos: null,
   },
   {
     id: 'semifinal', nombre: 'Semifinal', tipo: 'semi', bloquesPorCategoria: 5,
@@ -69,15 +71,30 @@ const RONDAS = [
 
 export const ETAPA_ACTIVA = 'final';
 
+// Sectores de la ronda americana: cada uno mezcla bloques fáciles y difíciles,
+// para que los jueces no tengan todo el público en el mismo lugar.
+// A: 1, 5, 9, 13, 17, 21 · B: 2, 6, 10, … · C: 3, 7, 11, … · D: 4, 8, 12, …
+function sectoresDemo(boulders) {
+  const sectores = { A: [], B: [], C: [], D: [] };
+  const nombres = Object.keys(sectores);
+  boulders.forEach((id, index) => sectores[nombres[index % nombres.length]].push(id));
+  return sectores;
+}
+
 // Documentos de etapa tal como se guardan en Firestore.
-export const ETAPAS = Object.fromEntries(RONDAS.map((ronda) => [ronda.id, {
-  id: ronda.id,
-  nombre: ronda.nombre,
-  tipo: ronda.tipo,
-  boulders: [...bloques('W', ronda.bloquesPorCategoria), ...bloques('M', ronda.bloquesPorCategoria)],
-  duracionTurno: ronda.duracionTurno,
-  etapaPreviaId: ronda.etapaPreviaId,
-}]));
+export const ETAPAS = Object.fromEntries(RONDAS.map((ronda) => {
+  const base = { id: ronda.id, nombre: ronda.nombre, tipo: ronda.tipo, etapaPreviaId: ronda.etapaPreviaId };
+  if (ronda.formato === 'americana') {
+    const boulders = bloquesAmericana(ronda.bloquesAmericana);
+    return [ronda.id, { ...base, formato: 'americana', boulders, sectores: sectoresDemo(boulders), ...AMERICANA_POR_DEFECTO }];
+  }
+  return [ronda.id, {
+    ...base,
+    formato: 'wc',
+    boulders: [...bloques('W', ronda.bloquesPorCategoria), ...bloques('M', ronda.bloquesPorCategoria)],
+    duracionTurno: ronda.duracionTurno,
+  }];
+}));
 
 function generador(semilla) {
   let estado = semilla >>> 0;
@@ -108,6 +125,31 @@ function simularBloque(azar, nivel, dificultad, maxIntentos) {
     }
   }
   return { intentos: topEnIntento ?? maxIntentos, zonaEnIntento, topEnIntento };
+}
+
+// Ronda americana: cada competidora prueba bloques cerca de su nivel, con hasta 5 intentos.
+// Mientras más difícil el bloque (número más alto), menos probable encadenarlo.
+function simularAmericana(azar, nivel, etapa) {
+  const total = etapa.boulders.length;
+  const resultados = [];
+  etapa.boulders.forEach((boulderId, index) => {
+    const dificultad = (index + 1) / total;
+    // Prueba casi todos los fáciles y algunos difíciles.
+    if (azar() > acotar(1.15 - dificultad + nivel * 0.4, 0.15, 0.95)) return;
+    const pTop = acotar(nivel * 1.35 - dificultad + 0.25, 0.03, 0.9);
+    let topEnIntento = null;
+    let intentos = 0;
+    const tope = 1 + Math.floor(azar() * etapa.maxIntentos);
+    while (intentos < tope) {
+      intentos += 1;
+      if (azar() < pTop) {
+        topEnIntento = intentos;
+        break;
+      }
+    }
+    resultados.push({ boulderId, intentos, zonaEnIntento: topEnIntento, topEnIntento });
+  });
+  return resultados;
 }
 
 function turno(etapaId, categoriaId, boulderId, competidorId, index, horaProgramada) {
@@ -144,13 +186,22 @@ export function generarDemo() {
     // Ranking de la etapa previa, con su propio desempate, para elegir clasificadas.
     const rankingPrevio = ronda.etapaPreviaId
       ? rankingPorCategoria({
-        competidores, turnos, resultados, etapaId: ronda.etapaPreviaId,
+        competidores, turnos, resultados, etapa: ETAPAS[ronda.etapaPreviaId],
         posicionesPrevias: posicionesPorEtapa[RONDAS.find((r) => r.id === ronda.etapaPreviaId).etapaPreviaId] || new Map(),
       })
       : null;
 
-    CATEGORIAS.forEach((categoria, indiceCategoria) => {
-      // Clasificatoria en orden de dorsal; las demás, al revés del ranking previo.
+    if (ronda.formato === 'americana') {
+      // Todas escalan a la vez: no hay turnos, solo resultados.
+      competidores.forEach((competidor) => {
+        simularAmericana(azar, nivel[competidor.id], ETAPAS[ronda.id]).forEach((resultado) => {
+          resultados.push({ etapaId: ronda.id, competidorId: competidor.id, ...resultado });
+        });
+      });
+    }
+
+    if (ronda.formato !== 'americana') CATEGORIAS.forEach((categoria, indiceCategoria) => {
+      // Las rondas World Climbing salen al revés del ranking previo.
       const orden = rankingPrevio
         ? ordenDeSalida(rankingPrevio.find((g) => g.categoriaId === categoria.id).filas, ronda.cupos).slice(-ronda.cupos)
         : competidores.filter((c) => c.categoriaId === categoria.id);
@@ -185,7 +236,7 @@ export function generarDemo() {
     });
 
     posicionesPorEtapa[ronda.id] = posicionesDeRanking(rankingPorCategoria({
-      competidores, turnos, resultados, etapaId: ronda.id,
+      competidores, turnos, resultados, etapa: ETAPAS[ronda.id],
       posicionesPrevias: posicionesPorEtapa[ronda.etapaPreviaId] || new Map(),
     }));
   });

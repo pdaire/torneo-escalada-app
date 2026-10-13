@@ -40,14 +40,14 @@ export function useResultadosCompetencia(competenciaId) {
 
 // Ranking por categoría de una etapa. Si tiene `etapaPreviaId`,
 // los empates se rompen con la posición en esa etapa.
-export function useRankingEtapa({ competencia, etapa, competidores, turnos }) {
+export function useRankingEtapa({ competencia, etapa, etapas = [], competidores, turnos }) {
   const actual = useResultadosEtapa(competencia?.id, etapa?.id);
   const previa = useResultadosEtapa(competencia?.id, etapa?.etapaPreviaId);
 
   const grupos = useMemo(() => (etapa
-    ? rankingConDesempate({ etapa, competidores, turnos, resultados: [...actual.resultados, ...previa.resultados] })
+    ? rankingConDesempate({ etapa, etapas, competidores, turnos, resultados: [...actual.resultados, ...previa.resultados] })
     : []
-  ), [etapa, competidores, turnos, actual.resultados, previa.resultados]);
+  ), [etapa, etapas, competidores, turnos, actual.resultados, previa.resultados]);
 
   return {
     grupos,

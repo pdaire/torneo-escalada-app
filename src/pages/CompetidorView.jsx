@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
 import { useResultadosCompetencia } from '../hooks/useResultados';
 import { detalleCompetidor } from '../utils/ranking';
-import { formatearPuntos } from '../utils/score';
+import { esAmericana, formatearPuntaje, formatearPuntos, reglasAmericana } from '../utils/score';
 import { EstadoCategoria, IconoLogro } from '../components/Marcador';
 import './publico.css';
 
@@ -28,13 +28,51 @@ function FilaBloque({ bloque }) {
       <td>{bloque.zonaEnIntento ?? '–'}</td>
       <td>{bloque.topEnIntento ?? '–'}</td>
       <td>{bloque.intentos}</td>
-      <td className="numero">{formatearPuntos(bloque.decimas)}</td>
+      <td className="numero">{formatearPuntos(bloque.puntos)}</td>
     </tr>
+  );
+}
+
+// Ronda americana: solo los bloques intentados, marcando los que suman al total.
+function TablaAmericana({ item }) {
+  const { etapa } = item;
+  const intentados = item.bloques.filter((bloque) => bloque.intentos > 0);
+  const reglas = reglasAmericana(etapa);
+  return (
+    <>
+      <table className="ficha-tabla">
+        <thead>
+          <tr>
+            <th>Bloque</th>
+            <th>Intentos</th>
+            <th>Encadenó</th>
+            <th className="numero">Puntos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {intentados.map((bloque) => (
+            <tr key={bloque.boulderId} className={bloque.cuenta ? 'suma' : undefined}>
+              <td><span className="ficha-bloque">{bloque.boulderId}</span></td>
+              <td>{bloque.intentos}</td>
+              <td>{bloque.topEnIntento != null ? `✓ intento ${bloque.topEnIntento}` : '✗'}</td>
+              <td className="numero">{bloque.puntos}{bloque.cuenta ? ' ★' : ''}</td>
+            </tr>
+          ))}
+          {!intentados.length && (
+            <tr className="pendiente"><td colSpan={4}>Todavía no intenta ningún bloque.</td></tr>
+          )}
+        </tbody>
+      </table>
+      <p className="ficha-nota">
+        ★ suma al total: los {reglas.mejoresBloques} mejores bloques. {item.bloques.length - intentados.length} de {item.bloques.length} bloques sin intentar.
+      </p>
+    </>
   );
 }
 
 function TarjetaEtapa({ item }) {
   const { etapa } = item;
+  const americana = esAmericana(etapa);
   return (
     <section className="ficha-etapa">
       <div className="ficha-etapa-encabezado">
@@ -43,12 +81,14 @@ function TarjetaEtapa({ item }) {
           <EstadoCategoria estado={item.estado} />
         </h2>
         <p className="ficha-resumen">
-          <span className={item.posicion === 1 && item.decimas > 0 ? 'oro' : ''}>{item.posicion}°</span>
+          <span className={item.posicion === 1 && item.puntaje > 0 ? 'oro' : ''}>{item.posicion}°</span>
           <small> de {item.totalCategoria} · </small>
-          {formatearPuntos(item.decimas)} pts
+          {formatearPuntaje(etapa, item.puntaje)} pts
+          {americana && <small> · {item.tops} tops</small>}
         </p>
       </div>
-      <div style={{ overflowX: 'auto' }}>
+      {americana && <TablaAmericana item={item} />}
+      {!americana && <div style={{ overflowX: 'auto' }}>
         <table className="ficha-tabla">
           <thead>
             <tr>
@@ -63,7 +103,7 @@ function TarjetaEtapa({ item }) {
             {item.bloques.map((bloque) => <FilaBloque key={bloque.boulderId} bloque={bloque} />)}
           </tbody>
         </table>
-      </div>
+      </div>}
     </section>
   );
 }

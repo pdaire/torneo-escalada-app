@@ -27,6 +27,6 @@ export const db = initializeFirestore(app, {
 });
 export const auth = getAuth(app);
 if (emulador) {
-  connectFirestoreEmulator(db, "127.0.0.1", 8080);
-  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", Number(import.meta.env.VITE_PUERTO_FIRESTORE) || 8080);
+  connectAuthEmulator(auth, `http://127.0.0.1:${import.meta.env.VITE_PUERTO_AUTH || 9099}`, { disableWarnings: true });
 }

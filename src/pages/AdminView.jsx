@@ -9,6 +9,8 @@ import { DEMO_DELEGADO, DEMO_ID, DEMO_JUEZ } from '../data/demo';
 import { useEsAdmin, useUsuario } from '../hooks/useSesion';
 import { resultadosColRef } from '../utils/resultado';
 import { ordenDeSalida, rankingPorCategoria } from '../utils/ranking';
+import { AMERICANA_POR_DEFECTO, FORMATOS, esAmericana, reglasAmericana } from '../utils/score';
+import { bloquesAmericana, parsearSectores, textoDeSectores } from '../utils/sectores';
 import './admin.css';
 import {
   competenciaRef,
@@ -53,6 +55,7 @@ export default function AdminView() {
   const [origenOrden, setOrigenOrden] = useState('categoria');
   const [asignacion, setAsignacion] = useState({ correo: '', etapaId: '' });
   const [progresoDemo, setProgresoDemo] = useState('');
+  const [formatoNueva, setFormatoNueva] = useState('wc');
 
   useEffect(() => {
     document.body.classList.add('admin-mode');
@@ -121,22 +124,63 @@ export default function AdminView() {
 
   const crearEtapa = (evento) => {
     evento.preventDefault();
-    const datos = new FormData(evento.currentTarget);
+    const formulario = evento.currentTarget;
+    const datos = new FormData(formulario);
     const nombre = String(datos.get('nombre')).trim();
-    const boulders = String(datos.get('boulders')).split(',').map((item) => item.trim()).filter(Boolean);
     const id = `${slug(nombre)}-${Date.now().toString(36)}`;
-    ejecutar(async () => {
-      await setDoc(doc(etapasCol(db, competenciaId), id), {
-        nombre,
-        tipo: datos.get('tipo'),
+    const base = {
+      nombre,
+      tipo: datos.get('tipo'),
+      formato: formatoNueva,
+      activa: etapas.length === 0,
+      estado: 'abierta',
+      categoriasCerradas: [],
+      etapaPreviaId: datos.get('etapaPreviaId') || null,
+    };
+    let etapa;
+    if (formatoNueva === 'americana') {
+      const boulders = bloquesAmericana(Number(datos.get('cantidad')) || 24);
+      const { sectores, error: errorSectores } = parsearSectores(datos.get('sectores'), boulders);
+      if (errorSectores) {
+        setError(errorSectores);
+        return;
+      }
+      const numero = (clave) => {
+        const valor = Number(datos.get(clave));
+        return Number.isFinite(valor) && valor >= 0 ? valor : AMERICANA_POR_DEFECTO[clave];
+      };
+      etapa = {
+        ...base,
         boulders,
+        sectores,
+        ...Object.fromEntries(Object.keys(AMERICANA_POR_DEFECTO).map((clave) => [clave, numero(clave)])),
+      };
+    } else {
+      etapa = {
+        ...base,
+        boulders: String(datos.get('boulders')).split(',').map((item) => item.trim()).filter(Boolean),
         duracionTurno: Number(datos.get('duracion')) || 4,
-        activa: etapas.length === 0,
-        estado: 'abierta',
-        categoriasCerradas: [],
-        etapaPreviaId: datos.get('etapaPreviaId') || null,
-      });
+      };
+    }
+    ejecutar(async () => {
+      await setDoc(doc(etapasCol(db, competenciaId), id), etapa);
+      formulario.reset();
+      setFormatoNueva('wc');
     });
+  };
+
+  const editarSectores = (etapa) => {
+    const texto = window.prompt(
+      `Sectores de ${etapa.nombre}. Ejemplo: A: 1, 8, 23, 32; B: 2, 9, 16`,
+      textoDeSectores(etapa.sectores),
+    );
+    if (texto == null) return;
+    const { sectores, error: errorSectores } = parsearSectores(texto, etapa.boulders || []);
+    if (errorSectores) {
+      setError(errorSectores);
+      return;
+    }
+    ejecutar(() => updateDoc(doc(etapasCol(db, competenciaId), etapa.id), { sectores }));
   };
 
   const activarEtapa = (id) => ejecutar(async () => {
@@ -245,7 +289,7 @@ export default function AdminView() {
       competidores,
       turnos,
       resultados: snapshot.docs.map((item) => item.data()),
-      etapaId: etapa.etapaPreviaId,
+      etapa: etapas.find((item) => item.id === etapa.etapaPreviaId) || { id: etapa.etapaPreviaId },
     });
     const grupo = grupos.find((item) => item.categoriaId === categoriaId);
     return ordenDeSalida(grupo?.filas || [], cupos).map((fila) => competidores.find((item) => item.id === fila.id));
@@ -331,8 +375,13 @@ export default function AdminView() {
     const miembro = miembros.find((item) => item.id === asignacion.correo);
     const etapaId = asignacion.etapaId;
     if (!miembro || !etapaId) return;
+    const etapa = etapas.find((item) => item.id === etapaId);
+    const bloques = [
+      ...datos.getAll('boulders'),
+      ...datos.getAll('sectores').flatMap((nombre) => etapa?.sectores?.[nombre] || []),
+    ];
     ejecutar(() => updateDoc(miembroRef(db, competenciaId, miembro.id), {
-      asignaciones: { ...(miembro.asignaciones || {}), [etapaId]: datos.getAll('boulders') },
+      asignaciones: { ...(miembro.asignaciones || {}), [etapaId]: [...new Set(bloques)] },
     }));
   };
 
@@ -471,27 +520,58 @@ export default function AdminView() {
         <>
           <section className="admin-section">
             <h2>Etapas</h2>
-            <form onSubmit={crearEtapa} className="admin-row">
-              <input name="nombre" placeholder="Qualis, semi o final" required />
-              <select name="tipo">
-                <option value="qualis">Qualis</option>
-                <option value="semi">Semifinal</option>
-                <option value="final">Final</option>
-              </select>
-              <input name="boulders" defaultValue="W1, W2, W3, W4, M1, M2, M3, M4" title="Bloques de la etapa. Cada categoría usa los que tengan turnos para ella." />
-              <input name="duracion" type="number" min="1" defaultValue="4" className="admin-field-narrow" />
-              <select name="etapaPreviaId" defaultValue="" title="Desempata con la posición en esa etapa y permite generar el orden con sus clasificadas">
-                <option value="">Sin etapa previa</option>
-                {etapas.map((item) => <option key={item.id} value={item.id}>Después de {item.nombre}</option>)}
-              </select>
-              <button className="admin-btn">Agregar</button>
+            <form onSubmit={crearEtapa} className="admin-stack">
+              <div className="admin-row">
+                <input name="nombre" placeholder="Qualis, semi o final" required />
+                <select name="tipo">
+                  <option value="qualis">Qualis</option>
+                  <option value="semi">Semifinal</option>
+                  <option value="final">Final</option>
+                </select>
+                <select value={formatoNueva} onChange={(evento) => setFormatoNueva(evento.target.value)} title="Formato de puntuación">
+                  {Object.entries(FORMATOS).map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+                </select>
+                <select name="etapaPreviaId" defaultValue="" title="Desempata con la posición en esa etapa y permite generar el orden con sus clasificadas">
+                  <option value="">Sin etapa previa</option>
+                  {etapas.map((item) => <option key={item.id} value={item.id}>Después de {item.nombre}</option>)}
+                </select>
+              </div>
+              {formatoNueva === 'wc' ? (
+                <div className="admin-row">
+                  <label>Bloques <input name="boulders" defaultValue="W1, W2, W3, W4, M1, M2, M3, M4" title="Cada categoría usa los que tengan turnos para ella." /></label>
+                  <label>Minutos por turno <input name="duracion" type="number" min="1" defaultValue="4" className="admin-field-narrow" /></label>
+                  <button className="admin-btn">Agregar</button>
+                </div>
+              ) : (
+                <>
+                  <div className="admin-row">
+                    <label>Bloques <input name="cantidad" type="number" min="1" max="99" defaultValue="24" className="admin-field-narrow" /></label>
+                    <label>B1 al 1.er intento <input name="puntajeBase" type="number" min="0" defaultValue={AMERICANA_POR_DEFECTO.puntajeBase} className="admin-field-narrow" /></label>
+                    <label>+ por bloque <input name="incrementoPorBloque" type="number" min="0" defaultValue={AMERICANA_POR_DEFECTO.incrementoPorBloque} className="admin-field-narrow" /></label>
+                    <label>− por intento <input name="descuentoPorIntento" type="number" min="0" defaultValue={AMERICANA_POR_DEFECTO.descuentoPorIntento} className="admin-field-narrow" /></label>
+                    <label>Máx. intentos <input name="maxIntentos" type="number" min="1" defaultValue={AMERICANA_POR_DEFECTO.maxIntentos} className="admin-field-narrow" /></label>
+                    <label>Bloques que suman <input name="mejoresBloques" type="number" min="1" defaultValue={AMERICANA_POR_DEFECTO.mejoresBloques} className="admin-field-narrow" /></label>
+                  </div>
+                  <div className="admin-row">
+                    <label style={{ flex: 1 }}>Sectores <input name="sectores" placeholder="A: 1, 8, 23, 32; B: 2, 9, 16" style={{ width: '100%' }} /></label>
+                    <button className="admin-btn">Agregar</button>
+                  </div>
+                  <p className="admin-meta">
+                    Bloques B1 a BN, todas las categorías en los mismos. Con los valores por defecto, B1 vale 10, 8, 6, 4, 2 y cada bloque
+                    siguiente vale 2 más. Suman los mejores bloques. Los sectores agrupan los bloques que revisa cada juez.
+                  </p>
+                </>
+              )}
             </form>
             {etapas.map((item) => (
               <div key={item.id} className="admin-stack">
               <div className="admin-row">
                 <strong>{item.nombre}</strong>
                 <span className="admin-meta">
-                  {item.boulders?.join(', ')}
+                  {esAmericana(item)
+                    ? `${FORMATOS.americana} · ${item.boulders?.length} bloques · suman ${reglasAmericana(item).mejoresBloques} · máx. ${reglasAmericana(item).maxIntentos} intentos`
+                      + (Object.keys(item.sectores || {}).length ? ` · sectores ${textoDeSectores(item.sectores)}` : '')
+                    : item.boulders?.join(', ')}
                   {item.etapaPreviaId ? ` · después de ${nombreEtapa(item.etapaPreviaId)}` : ''}
                   {item.estado === 'cerrada' ? ' · cerrada' : ''}
                 </span>
@@ -499,6 +579,7 @@ export default function AdminView() {
                 <button onClick={() => cambiarEstadoEtapa(item)} className="admin-btn-secondary">
                   {item.estado === 'cerrada' ? 'Reabrir' : 'Cerrar'}
                 </button>
+                {esAmericana(item) && <button onClick={() => editarSectores(item)} className="admin-btn-secondary">Sectores</button>}
               </div>
               {item.estado !== 'cerrada' && categorias.length > 1 && (
                 <div className="admin-row">
@@ -537,6 +618,9 @@ export default function AdminView() {
 
           <section className="admin-section">
             <h2>Orden de paso</h2>
+            {esAmericana(etapaOrden) && (
+              <p className="admin-meta">{etapaOrden.nombre} es una ronda americana: no tiene orden de paso, todas escalan a la vez. Elige otra etapa para generar turnos.</p>
+            )}
             {etapas.length > 0 && (
               <form onSubmit={generarOrden} className="admin-row">
                 <select name="etapaId" value={etapaOrden?.id || ''} onChange={(evento) => setEtapaOrdenId(evento.target.value)} required>
@@ -561,7 +645,7 @@ export default function AdminView() {
                 )}
                 <input name="hora" type="time" defaultValue="15:15" required />
                 <input name="intervalo" type="number" min="1" defaultValue={etapaOrden?.duracionTurno || 4} className="admin-field-narrow" />
-                <button className="admin-btn">Generar</button>
+                <button className="admin-btn" disabled={esAmericana(etapaOrden)}>Generar</button>
               </form>
             )}
             {origenOrden === 'previa' && (
@@ -621,7 +705,17 @@ export default function AdminView() {
               </select>
               {etapaAsignacion && miembroAsignacion && (
                 <span key={`${miembroAsignacion.id}-${etapaAsignacion.id}`} className="admin-row">
-                  {etapaAsignacion.boulders.map((id) => (
+                  {Object.entries(etapaAsignacion.sectores || {}).map(([nombre, ids]) => (
+                    <label key={`sector-${nombre}`}>
+                      <input
+                        type="checkbox"
+                        name="sectores"
+                        value={nombre}
+                        defaultChecked={ids.length > 0 && ids.every((id) => (miembroAsignacion.asignaciones?.[etapaAsignacion.id] || []).includes(id))}
+                      /> Sector {nombre}
+                    </label>
+                  ))}
+                  {!Object.keys(etapaAsignacion.sectores || {}).length && etapaAsignacion.boulders.map((id) => (
                     <label key={id}>
                       <input
                         type="checkbox"

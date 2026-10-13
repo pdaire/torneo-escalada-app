@@ -37,7 +37,14 @@ erDiagram
         string_array boulders "M1, M2, M3, M4"
         number duracionTurno "minutos"
         boolean activa "una sola activa por competencia"
+        string formato "wc | americana"
         string estado "abierta | cerrada"
+        map sectores "americana: nombre a lista de bloques"
+        number puntajeBase "americana: B1 al 1.er intento (10)"
+        number incrementoPorBloque "americana (2)"
+        number descuentoPorIntento "americana (2)"
+        number maxIntentos "americana (5)"
+        number mejoresBloques "americana (5)"
         string_array categoriasCerradas "categoriaId finalizadas"
         string etapaPreviaId "opcional: desempate y clasificadas"
     }
@@ -156,6 +163,8 @@ Los resultados anteriores a este cambio no tienen `version`. Se leen como versi�
 
 `categoriasCerradas` finaliza categorías sueltas dentro de una etapa abierta, por ejemplo cuando una final termina antes que otra. Las reglas bloquean los resultados de esas categorías y el tablero las marca como finalizadas.
 
+`formato` define cómo se puntúa: `wc` (World Climbing, el valor por defecto) o `americana`. Una ronda americana tiene bloques `B1`…`BN` que comparten todas las categorías, no tiene turnos y guarda su tabla de puntos en la etapa. `sectores` agrupa los bloques que revisa cada juez; al asignar un sector a un juez se guardan sus bloques en `asignaciones`. Ver [Puntuación](puntuacion.md#ronda-americana).
+
 `etapaPreviaId` encadena rondas: desempata el ranking con la posición en la etapa previa y permite generar el orden de paso con sus clasificadas.
 
 ## Apelaciones
@@ -179,6 +188,7 @@ El archivo es `firestore.rules` y los tests están en `tests/rules/`.
 - El público lee competencias, etapas, competidoras, turnos y resultados.
 - Solo un admin escribe la configuración de una competencia.
 - Un juez escribe resultados solo en sus bloques asignados, con un marcador válido, en una etapa abierta y en una categoría no finalizada. El juez jefe, en cualquier bloque.
+- En una ronda americana, además: no más intentos que `maxIntentos`, y el encadenado tiene que ser el último intento.
 - Los resultados no se borran, ni siquiera el admin. El historial es solo-agregar y lo leen los jueces de la competencia.
 - Un delegado crea apelaciones con su propio correo, edita sus borradores y lee solo las suyas.
 - Solo el juez jefe resuelve una apelación, y nunca una propia.

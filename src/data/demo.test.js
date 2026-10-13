@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CATEGORIA_EN_CURSO, generarDemo } from './demo';
+import { CATEGORIA_EN_CURSO, ETAPAS, generarDemo } from './demo';
 import { validarResultado } from '../utils/resultado';
 import { rankingPorCategoria } from '../utils/ranking';
 
@@ -17,8 +17,22 @@ describe('generarDemo', () => {
     demo.resultados.forEach((r) => expect(validarResultado(r)).toBe(''));
   });
 
-  it('la clasificatoria está completa: 72 competidoras × 6 bloques', () => {
-    expect(demo.resultados.filter((r) => r.etapaId === 'clasificatoria')).toHaveLength(432);
+  it('la clasificatoria es una ronda americana de 24 bloques, con sectores y sin turnos', () => {
+    const clasificatoria = ETAPAS.clasificatoria;
+    expect(clasificatoria).toMatchObject({ formato: 'americana', maxIntentos: 5, mejoresBloques: 5 });
+    expect(clasificatoria.boulders).toHaveLength(24);
+    expect(Object.values(clasificatoria.sectores).flat().sort()).toEqual(clasificatoria.boulders.slice().sort());
+    expect(demo.turnos.some((t) => t.etapaId === 'clasificatoria')).toBe(false);
+    const resultados = demo.resultados.filter((r) => r.etapaId === 'clasificatoria');
+    resultados.forEach((r) => {
+      expect(r.intentos).toBeGreaterThanOrEqual(1);
+      expect(r.intentos).toBeLessThanOrEqual(5);
+      if (r.topEnIntento != null) expect(r.topEnIntento).toBe(r.intentos);
+    });
+    // Todas las competidoras participan y casi todas suman algo.
+    const grupos = rankingPorCategoria({ ...demo, etapa: clasificatoria });
+    expect(grupos.flatMap((g) => g.filas)).toHaveLength(72);
+    expect(grupos.flatMap((g) => g.filas).filter((f) => f.puntaje > 0).length).toBeGreaterThan(60);
   });
 
   it('la semifinal está completa: 8 por categoría × 5 bloques', () => {
@@ -31,7 +45,7 @@ describe('generarDemo', () => {
     const enSemi = new Set(demo.turnos.filter((t) => t.etapaId === 'semifinal').map((t) => t.competidorId));
     const enFinal = new Set(demo.turnos.filter((t) => t.etapaId === 'final').map((t) => t.competidorId));
     enFinal.forEach((id) => expect(enSemi.has(id)).toBe(true));
-    rankingPorCategoria({ ...demo, etapaId: 'clasificatoria' }).forEach((g) => {
+    rankingPorCategoria({ ...demo, etapa: ETAPAS.clasificatoria }).forEach((g) => {
       g.filas.filter((f) => f.posicion <= 8).slice(0, 8).forEach((f) => expect(enSemi.has(f.id)).toBe(true));
     });
   });
@@ -56,14 +70,14 @@ describe('generarDemo', () => {
     grupos.forEach((g) => expect(g.filas).toHaveLength(6));
   });
 
-  it('las mujeres escalan W y los hombres M: 6, 5 y 4 bloques por ronda', () => {
+  it('en semifinal y final las mujeres escalan W y los hombres M: 5 y 4 bloques', () => {
     demo.turnos.forEach((t) => {
       expect(t.boulderId[0]).toBe(t.categoriaId.startsWith('mujeres') ? 'W' : 'M');
     });
     const cantidad = (etapaId) => new Set(demo.turnos
       .filter((t) => t.etapaId === etapaId && t.categoriaId === 'mujeres-adultas')
       .map((t) => t.boulderId)).size;
-    expect([cantidad('clasificatoria'), cantidad('semifinal'), cantidad('final')]).toEqual([6, 5, 4]);
+    expect([cantidad('semifinal'), cantidad('final')]).toEqual([5, 4]);
   });
 
   it('es determinística', () => {

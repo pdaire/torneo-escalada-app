@@ -48,6 +48,20 @@ describe('competencia demo', () => {
     await denegado(guardarResultado(juez, claveCerrada, { intentos: 9, zonaEnIntento: null, topEnIntento: null, version: 2 }, 'edicion', 'pdaire+juez1@gmail.com'));
   });
 
+  it('ronda americana: el juez demo anota en sus sectores (A y B) y no en los demás', async () => {
+    await cargarDemo(usuario(ADMIN), ADMIN, []);
+    // Para demostrar la cartilla: se reabre la clasificatoria.
+    await setDoc(doc(sinReglas(), `competencias/${DEMO_ID}/etapas/clasificatoria`), { estado: 'abierta' }, { merge: true });
+    const juez = usuario('pdaire+juez1@gmail.com');
+    const competidorId = generarDemo().competidores[0].id;
+    const clave = (boulderId) => ({ competenciaId: DEMO_ID, etapaId: 'clasificatoria', competidorId, boulderId });
+    const version = async (boulderId) => ((await getDoc(doc(anonimo(), `resultados/${DEMO_ID}__clasificatoria__${competidorId}__${boulderId}`))).data()?.version ?? 0) + 1;
+    const top = async (boulderId) => ({ intentos: 1, zonaEnIntento: 1, topEnIntento: 1, version: await version(boulderId) });
+    await permitido(guardarResultado(juez, clave('B21'), await top('B21'), 'top', 'pdaire+juez1@gmail.com'));
+    await permitido(guardarResultado(juez, clave('B22'), await top('B22'), 'top', 'pdaire+juez1@gmail.com'));
+    await denegado(guardarResultado(juez, clave('B23'), await top('B23'), 'top', 'pdaire+juez1@gmail.com'));
+  });
+
   it('se puede recargar: reinicia lo anotado durante la demo', async () => {
     await cargarDemo(usuario(ADMIN), ADMIN, []);
     const pendiente = generarDemo().turnos.find((t) => t.etapaId === 'final' && t.categoriaId === 'mujeres-adultas' && t.orden === 6);

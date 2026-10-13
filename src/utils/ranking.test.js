@@ -22,7 +22,7 @@ describe('rankingPorCategoria', () => {
     });
     expect(grupos.map((g) => g.categoriaId)).toEqual(['damas', 'varones']);
     expect(grupos[0].filas.map((f) => [f.id, f.posicion])).toEqual([['d2', 1], ['d1', 2], ['d3', 2]]);
-    expect(grupos[1].filas[0]).toMatchObject({ id: 'v1', posicion: 1, decimas: 250 });
+    expect(grupos[1].filas[0]).toMatchObject({ id: 'v1', posicion: 1, puntaje: 250 });
   });
 
   it('solo considera resultados de la etapa', () => {
@@ -32,7 +32,7 @@ describe('rankingPorCategoria', () => {
       resultados: [resultado('d1', 'M1', 1, 1, 'qualis')],
       etapaId: 'final',
     });
-    expect(grupos[0].filas.every((f) => f.decimas === 0)).toBe(true);
+    expect(grupos[0].filas.every((f) => f.puntaje === 0)).toBe(true);
   });
 
   it('con turnos, participan solo quienes tienen turno o resultado', () => {
@@ -61,10 +61,10 @@ describe('rankingPorCategoria', () => {
 describe('ordenarFilas', () => {
   it('comparte posición en un empate sin desempate', () => {
     const filas = ordenarFilas([
-      { id: 'a', dorsal: '1', decimas: 100, previa: null },
-      { id: 'b', dorsal: '2', decimas: 250, previa: null },
-      { id: 'c', dorsal: '3', decimas: 100, previa: null },
-      { id: 'd', dorsal: '4', decimas: 50, previa: null },
+      { id: 'a', dorsal: '1', puntaje: 100, previa: null },
+      { id: 'b', dorsal: '2', puntaje: 250, previa: null },
+      { id: 'c', dorsal: '3', puntaje: 100, previa: null },
+      { id: 'd', dorsal: '4', puntaje: 50, previa: null },
     ]);
     expect(filas.map((f) => [f.id, f.posicion])).toEqual([['b', 1], ['a', 2], ['c', 2], ['d', 4]]);
   });
@@ -135,11 +135,11 @@ describe('detalleCompetidor', () => {
     ];
     const detalle = detalleCompetidor({ competidorId: 'd1', etapas, competidores, turnos, resultados });
     expect(detalle.map((d) => d.etapa.id)).toEqual(['qualis', 'final']);
-    expect(detalle[0]).toMatchObject({ posicion: 2, totalCategoria: 2, decimas: 249, estado: 'finalizada', categoriaId: 'damas' });
+    expect(detalle[0]).toMatchObject({ posicion: 2, totalCategoria: 2, puntaje: 249, estado: 'finalizada', categoriaId: 'damas' });
     expect(detalle[1].estado).toBe(null);
     expect(detalle[1].bloques).toEqual([
-      { boulderId: 'W1', intentos: 3, zonaEnIntento: 2, topEnIntento: null, decimas: 99, horaProgramada: '16:00', pendiente: false },
-      { boulderId: 'W2', intentos: 0, zonaEnIntento: null, topEnIntento: null, decimas: 0, horaProgramada: '16:04', pendiente: true },
+      { boulderId: 'W1', intentos: 3, zonaEnIntento: 2, topEnIntento: null, puntos: 99, cuenta: true, horaProgramada: '16:00', pendiente: false },
+      { boulderId: 'W2', intentos: 0, zonaEnIntento: null, topEnIntento: null, puntos: 0, cuenta: false, horaProgramada: '16:04', pendiente: true },
     ]);
   });
 });
@@ -173,7 +173,7 @@ describe('categoriasDeBloque', () => {
 });
 
 describe('cambios del tablero', () => {
-  const fila = (id, decimas, boulders) => ({ id, decimas, boulders });
+  const fila = (id, puntaje, boulders) => ({ id, puntaje, boulders });
 
   it('detecta zona, top y puntaje nuevos, pero no un intento sin zona ni top', async () => {
     const { cambiosEntre, firmasDeRanking } = await import('./ranking');
@@ -192,5 +192,26 @@ describe('cambios del tablero', () => {
       fila('b', 250, { W1: { zonaEnIntento: 1, topEnIntento: 3 } }),
     ] }]);
     expect(cambiosEntre(antes, despues).sort()).toEqual(['a', 'a/W1', 'b', 'b/W1']);
+  });
+});
+
+describe('ranking de ronda americana', () => {
+  it('suma los 5 mejores, cuenta tops y comparte posición en empate', async () => {
+    const { rankingPorCategoria } = await import('./ranking');
+    const etapa = { id: 'clasif', formato: 'americana', boulders: Array.from({ length: 24 }, (_, i) => `B${i + 1}`) };
+    const top = (competidorId, boulderId, topEnIntento) => ({
+      etapaId: 'clasif', competidorId, boulderId, intentos: topEnIntento, zonaEnIntento: topEnIntento, topEnIntento,
+    });
+    const resultados = [
+      ...['B20', 'B21', 'B22', 'B23', 'B24', 'B1'].map((b) => top('d1', b, 1)),
+      top('d2', 'B24', 2), top('d2', 'B23', 1),
+      { etapaId: 'clasif', competidorId: 'd3', boulderId: 'B24', intentos: 5, zonaEnIntento: null, topEnIntento: null },
+    ];
+    const [damas] = rankingPorCategoria({ competidores, turnos: [], resultados, etapa });
+    const d1 = damas.filas.find((f) => f.id === 'd1');
+    expect(d1).toMatchObject({ posicion: 1, puntaje: 48 + 50 + 52 + 54 + 56, tops: 6 });
+    expect(d1.cuentan).toEqual(['B24', 'B23', 'B22', 'B21', 'B20']);
+    expect(damas.filas.find((f) => f.id === 'd2')).toMatchObject({ posicion: 2, puntaje: 54 + 54, tops: 2 });
+    expect(damas.filas.find((f) => f.id === 'd3')).toMatchObject({ posicion: 3, puntaje: 0, tops: 0 });
   });
 });
