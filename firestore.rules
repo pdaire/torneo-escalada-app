@@ -12,8 +12,12 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
+    // Super admin: su correo está en `admins` y viene verificado (entra con Google).
+    // Una cuenta de correo y clave con ese mismo correo no basta.
     function esAdmin() {
-      return autenticado() && exists(/databases/$(database)/documents/admins/$(correo()));
+      return autenticado()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/admins/$(correo()));
     }
 
     function rutaMiembro(c) {

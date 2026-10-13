@@ -33,6 +33,8 @@ export function useMiembro(user, competenciaId) {
   return { miembro: estado.miembro, cargando: estado.cargando };
 }
 
+// Super admin: su correo está en `admins` y está verificado (entró con Google).
+// Igual que en las reglas, una cuenta de correo y clave con ese correo no cuenta.
 export function useEsAdmin(user) {
   const [estado, setEstado] = useState({ esAdmin: false, cargando: true, correo: '' });
   const correo = normalizarCorreo(user?.email);
@@ -46,5 +48,10 @@ export function useEsAdmin(user) {
 
   if (!correo) return { esAdmin: false, cargando: false };
   if (estado.correo !== correo) return { esAdmin: false, cargando: true };
-  return { esAdmin: estado.esAdmin, cargando: estado.cargando };
+  return {
+    esAdmin: estado.esAdmin && Boolean(user?.emailVerified),
+    // Su correo está en `admins`, pero entró con correo y clave.
+    faltaGoogle: estado.esAdmin && !user?.emailVerified,
+    cargando: estado.cargando,
+  };
 }

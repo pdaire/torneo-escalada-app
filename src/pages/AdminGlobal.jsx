@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
 import { doc, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { cargarDemo } from '../data/cargarDemo';
@@ -31,11 +31,27 @@ const DEMOS = [
 
 const INICIOS_EJEMPLO = { M1: '15:15', M2: '15:31', M3: '15:47', M4: '16:03' };
 
+// En la demo local (emuladores) se puede entrar también con correo y clave.
+const CON_CLAVE = import.meta.env.VITE_EMULADOR === '1';
+
+function mensajeGoogle(error) {
+  if (error?.code === 'auth/admin-restricted-operation') {
+    return 'Firebase no permite crear cuentas nuevas. La primera vez, activa el registro en Authentication → Settings → User actions, entra con Google y vuelve a desactivarlo.';
+  }
+  if (error?.code === 'auth/operation-not-allowed') {
+    return 'El inicio de sesión con Google no está activado. Actívalo en Authentication → Sign-in method → Google.';
+  }
+  if (error?.code === 'auth/unauthorized-domain') {
+    return `Este dominio no está autorizado. Agrégalo en Authentication → Settings → Authorized domains: ${window.location.hostname}`;
+  }
+  return `No se pudo entrar con Google (${error?.code || error?.message}).`;
+}
+
 // Administración de la plataforma: todas las competencias. Solo para cuentas en `admins`.
 // Cada competencia se administra en /:competenciaId/admin, por ti o por sus organizadores.
 export default function AdminGlobal() {
   const { user, correo, cargando: cargandoSesion } = useUsuario();
-  const { esAdmin, cargando: cargandoAdmin } = useEsAdmin(user);
+  const { esAdmin, faltaGoogle, cargando: cargandoAdmin } = useEsAdmin(user);
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
@@ -57,6 +73,22 @@ export default function AdminGlobal() {
     });
   }, [esAdmin]);
 
+  const entrarConGoogle = async () => {
+    setError('');
+    const proveedor = new GoogleAuthProvider();
+    proveedor.setCustomParameters({ prompt: 'select_account' });
+    try {
+      await signInWithPopup(auth, proveedor);
+    } catch (err) {
+      if (err.code === 'auth/popup-blocked') {
+        await signInWithRedirect(auth, proveedor);
+        return;
+      }
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
+      setError(mensajeGoogle(err));
+    }
+  };
+
   const ejecutar = async (accion) => {
     try {
       await accion();
@@ -68,7 +100,7 @@ export default function AdminGlobal() {
     }
   };
 
-  const slugSugerido = slug(nombre);
+  const slugSugerido = nombre.trim() ? slug(nombre) : '';
   const slugFinal = slugElegido || slugSugerido;
 
   const crearCompetencia = (evento) => {
@@ -151,15 +183,37 @@ export default function AdminGlobal() {
   if (!user) {
     return (
       <main className="admin">
-        <h1>Administración</h1>
-        <form className="admin-login" onSubmit={(evento) => {
-          evento.preventDefault();
-          signInWithEmailAndPassword(auth, email, pin).catch(() => setError('Credenciales incorrectas.'));
-        }}>
-          <input type="email" placeholder="Correo" value={email} onChange={(evento) => setEmail(evento.target.value)} required />
-          <input type="password" placeholder="Clave" value={pin} onChange={(evento) => setPin(evento.target.value)} required />
-          <button className="admin-btn">Ingresar</button>
-        </form>
+        <h1>Administración de la plataforma</h1>
+        <div className="admin-login">
+          <button onClick={entrarConGoogle} className="admin-btn">Entrar con Google</button>
+        </div>
+        <p className="admin-meta">
+          Solo para el administrador de la plataforma. Si organizas una competencia, entra a su dirección: <code>/nombre-de-la-competencia/admin</code>.
+        </p>
+        {CON_CLAVE && (
+          <form className="admin-login" onSubmit={(evento) => {
+            evento.preventDefault();
+            signInWithEmailAndPassword(auth, email, pin).catch(() => setError('Credenciales incorrectas.'));
+          }}>
+            <span className="admin-meta">Demo local:</span>
+            <input type="email" placeholder="Correo" value={email} onChange={(evento) => setEmail(evento.target.value)} required />
+            <input type="password" placeholder="Clave" value={pin} onChange={(evento) => setPin(evento.target.value)} required />
+            <button className="admin-btn-secondary">Ingresar con clave</button>
+          </form>
+        )}
+        {error && <p className="admin-error">{error}</p>}
+      </main>
+    );
+  }
+
+  if (faltaGoogle) {
+    return (
+      <main className="admin">
+        <h1>Entra con Google</h1>
+        <p>{correo} es administrador de la plataforma, pero entró con correo y clave. Para administrar la plataforma hay que entrar con la cuenta de Google de ese correo.</p>
+        <div className="admin-row">
+          <button onClick={async () => { await signOut(auth); await entrarConGoogle(); }} className="admin-btn">Salir y entrar con Google</button>
+        </div>
         {error && <p className="admin-error">{error}</p>}
       </main>
     );

@@ -128,7 +128,7 @@ El id de cada competencia es su dirección (`/copa-chile-2026`), así que se eli
 
 | Rol | Dónde | Qué puede hacer |
 | --- | --- | --- |
-| Admin | `admins/{correo}` | La plataforma: crear competencias, publicarlas en la portada y configurar cualquiera. Se crea a mano en la consola. |
+| Super admin | `admins/{correo}` + entrar con Google | La plataforma: crear competencias, publicarlas en la portada y configurar cualquiera. Se crea a mano en la consola. Las reglas exigen el correo verificado, que entrega Google. |
 | Organizador | `miembros/{correo}` con `rol: organizador` | Configurar solo su competencia: datos, etapas, competidoras, turnos y miembros. No la publica en la portada. |
 | Juez | `miembros/{correo}` con `rol: juez` | Anotar en los bloques que tiene asignados en cada etapa. Leer apelaciones. |
 | Juez jefe | `miembros/{correo}` con `rol: juez_jefe` | Anotar en todos los bloques y resolver apelaciones. |

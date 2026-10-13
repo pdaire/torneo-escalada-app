@@ -121,7 +121,7 @@ Solo `/…/juez` se instala. La portada, el tablero, la ficha, `/admin` y `/dele
 
 ## Administración de la plataforma `/admin`
 
-Solo para cuentas que están en `admins`.
+Solo para el super admin: una cuenta que está en `admins` y entra con **Google**. Con correo y clave no se puede administrar la plataforma, aunque el correo sea el mismo. Los organizadores, jueces y delegados siguen entrando con correo y clave. En la demo local, `/admin` muestra también el formulario de clave.
 
 - **Nueva competencia:** nombre, dirección (se sugiere desde el nombre: "Copa Chile 2026" → `copa-chile-2026`), fecha, club organizador, lugar y, opcional, el correo del organizador. La dirección no se puede cambiar después: es el id de la competencia. Se crea oculta de la portada.
 - **Todas las competencias:** enlaces para administrar cada una y ver su tablero, y **Publicar en la portada** / **Quitar de la portada**. Pueden estar varias publicadas a la vez.

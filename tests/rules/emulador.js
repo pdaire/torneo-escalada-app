@@ -19,8 +19,14 @@ export function anonimo() {
   return cliente('anonimo');
 }
 
+// Cuenta de correo y clave: el correo no viene verificado.
 export function usuario(correo) {
   return cliente(correo, { sub: `uid-${correo}`, email: correo });
+}
+
+// Cuenta que entra con Google: el correo viene verificado.
+export function usuarioGoogle(correo) {
+  return cliente(`${correo}-google`, { sub: `uid-google-${correo}`, email: correo, email_verified: true });
 }
 
 // Ignora las reglas: sirve para preparar datos.

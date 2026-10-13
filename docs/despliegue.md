@@ -61,8 +61,9 @@ Las reglas se apoyan en roles. Hay que publicarlas junto con el código que las 
 Una sola vez, en la consola de Firebase:
 
 1. **Authentication → Settings → User actions:** desactivar *Enable create (sign-up)*. Si queda activo, cualquiera puede crear una cuenta con la API key pública. Las cuentas se crean en *Authentication → Users*.
-2. **Firestore:** crear la colección `admins` y, dentro, un documento por administrador cuyo ID sea su correo en minúsculas. Si la consola pide un campo, cualquiera sirve (por ejemplo `nombre`); la app solo revisa que el documento exista. La contraseña no va aquí: se define al crear el usuario en *Authentication → Users*.
-3. En `/admin`, crear cada competencia con su dirección. En `/{competencia}/admin`, agregar organizadores, jueces, juez jefe y delegados, y asignar bloques a los jueces.
+2. **Authentication → Sign-in method:** activar **Google**. El super admin entra a `/admin` solo con Google; las reglas exigen el correo verificado. Con el registro desactivado (paso 1), Firebase no crea cuentas nuevas ni con Google: la primera vez, activar el registro un momento, entrar con Google y volver a desactivarlo.
+3. **Firestore:** crear la colección `admins` y, dentro, un documento por administrador cuyo ID sea el correo de su cuenta de Google, en minúsculas. Si la consola pide un campo, cualquiera sirve (por ejemplo `nombre`); la app solo revisa que el documento exista. La contraseña no va aquí: se define al crear el usuario en *Authentication → Users*.
+4. En `/admin`, crear cada competencia con su dirección. En `/{competencia}/admin`, agregar organizadores, jueces, juez jefe y delegados, y asignar bloques a los jueces.
 
 ## Una competencia nueva para un club
 
@@ -85,7 +86,7 @@ Levanta los emuladores de Firestore y Authentication, carga las dos demos (la co
 
 | Cuenta | Rol en la demo |
 | --- | --- |
-| `admin@demo.local` | Admin y juez jefe |
+| `admin@demo.local` | Super admin (marcado como verificado) y juez jefe |
 | `pdaire+juez1@gmail.com` | Juez de los 8 bloques de la final |
 | `pdaire+delegado1@gmail.com` | Delegado de "Club Demo" |
 

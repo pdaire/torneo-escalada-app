@@ -3,7 +3,7 @@ import {
   addDoc, collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { guardarResultado } from '../../src/utils/resultado';
-import { anonimo, cerrar, denegado, limpiar, permitido, sinReglas, usuario } from './emulador';
+import { anonimo, cerrar, denegado, limpiar, permitido, sinReglas, usuario, usuarioGoogle } from './emulador';
 
 const C = 'copa';
 const clave = { competenciaId: C, etapaId: 'final', competidorId: 'damas-1', boulderId: 'M1' };
@@ -39,16 +39,16 @@ describe('configuración', () => {
     await denegado(setDoc(doc(anonimo(), `competencias/${C}`), { nombre: 'x' }));
     await denegado(setDoc(doc(usuario('juez@club.cl'), `competencias/${C}/competidores/x`), { nombre: 'x' }));
     await denegado(setDoc(doc(usuario('cualquiera@gmail.com'), `competencias/${C}`), { nombre: 'x' }));
-    await permitido(updateDoc(doc(usuario('admin@club.cl'), `competencias/${C}/etapas/final`), { estado: 'cerrada' }));
+    await permitido(updateDoc(doc(usuarioGoogle('admin@club.cl'), `competencias/${C}/etapas/final`), { estado: 'cerrada' }));
   });
 
   it('miembros: el admin los gestiona, cada uno lee solo el suyo', async () => {
     await permitido(getDoc(doc(usuario('juez@club.cl'), `competencias/${C}/miembros/juez@club.cl`)));
     await denegado(getDoc(doc(usuario('juez@club.cl'), `competencias/${C}/miembros/jefe@club.cl`)));
     await denegado(setDoc(doc(usuario('juez@club.cl'), `competencias/${C}/miembros/juez@club.cl`), { rol: 'juez_jefe' }));
-    await permitido(setDoc(doc(usuario('admin@club.cl'), `competencias/${C}/miembros/nuevo@club.cl`), { rol: 'juez', asignaciones: {} }));
-    await denegado(setDoc(doc(usuario('admin@club.cl'), `competencias/${C}/miembros/Nuevo@club.cl`), { rol: 'juez' }));
-    await denegado(setDoc(doc(usuario('admin@club.cl'), `competencias/${C}/miembros/x@club.cl`), { rol: 'rey' }));
+    await permitido(setDoc(doc(usuarioGoogle('admin@club.cl'), `competencias/${C}/miembros/nuevo@club.cl`), { rol: 'juez', asignaciones: {} }));
+    await denegado(setDoc(doc(usuarioGoogle('admin@club.cl'), `competencias/${C}/miembros/Nuevo@club.cl`), { rol: 'juez' }));
+    await denegado(setDoc(doc(usuarioGoogle('admin@club.cl'), `competencias/${C}/miembros/x@club.cl`), { rol: 'rey' }));
   });
 
   it('el organizador administra solo su competencia y no la publica en la portada', async () => {
@@ -74,8 +74,14 @@ describe('configuración', () => {
     await denegado(getDocs(collection(usuario('juez@club.cl'), `competencias/${C}/miembros`)));
   });
 
+  it('el super admin tiene que entrar con Google: con correo y clave no es admin', async () => {
+    await permitido(setDoc(doc(usuarioGoogle('admin@club.cl'), 'competencias/nueva-copa'), { nombre: 'Nueva', activa: false }));
+    await denegado(setDoc(doc(usuario('admin@club.cl'), 'competencias/otra-copa'), { nombre: 'Otra', activa: false }));
+    await denegado(updateDoc(doc(usuario('admin@club.cl'), `competencias/${C}`), { activa: false }));
+  });
+
   it('nadie escribe admins ni las colecciones viejas', async () => {
-    await denegado(setDoc(doc(usuario('admin@club.cl'), 'admins/otro@club.cl'), {}));
+    await denegado(setDoc(doc(usuarioGoogle('admin@club.cl'), 'admins/otro@club.cl'), {}));
     await denegado(setDoc(doc(usuario('juez@club.cl'), 'intentos/x'), { a: 1 }));
     await denegado(getDocs(collection(usuario('juez@club.cl'), 'apelaciones')));
   });
@@ -153,7 +159,7 @@ describe('resultados', () => {
 
   it('nadie borra resultados, ni el admin', async () => {
     await permitido(guardarResultado(usuario('juez@club.cl'), clave, marcador(1), 'intento', 'juez@club.cl'));
-    await denegado(deleteDoc(doc(usuario('admin@club.cl'), `resultados/${idRes}`)));
+    await denegado(deleteDoc(doc(usuarioGoogle('admin@club.cl'), `resultados/${idRes}`)));
   });
 
   it('el público lee resultados', async () => {
