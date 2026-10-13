@@ -49,10 +49,16 @@ Solo para cuentas que están en `admins`.
 
 **Cargar o reiniciar competencia demo** crea la competencia `demo` y la deja activa, así que el tablero público pasa a mostrarla. Para volver a la competencia real, actívala de nuevo.
 
-- Seis categorías (Mujeres y Hombres Sub 15, Sub 17 y Adultos), ocho competidoras cada una.
-- Las mujeres escalan W1–W4 y los hombres M1–M4 (Women y Men), en la clasificatoria y en la final.
-- Clasificatoria cerrada.
-- Final con las seis primeras de cada categoría, desempate por clasificatoria. Todas las categorías están finalizadas salvo Mujeres Adultas, que está a medias: cada finalista va en un bloque distinto y la última todavía no parte.
+- Seis categorías (Mujeres y Hombres Sub 15, Sub 17 y Adultos), doce competidoras cada una.
+- Tres rondas. Las mujeres escalan bloques W y los hombres bloques M (Women y Men):
+
+  | Ronda | Bloques por categoría | Pasan | Estado |
+  | --- | --- | --- | --- |
+  | Clasificatoria | 6 (W1–W6, M1–M6) | las 12 | Cerrada |
+  | Semifinal | 5 (W1–W5, M1–M5) | 8 | Cerrada |
+  | Final | 4 (W1–W4, M1–M4) | 6 | Activa |
+
+- En la final, todas las categorías están finalizadas salvo Mujeres Adultas, que está a medias: cada finalista va en un bloque distinto y la última todavía no parte. Los empates de la final se desempatan con la semifinal.
 - `pdaire+juez1@gmail.com` es juez de los ocho bloques de la final. `pdaire+delegado1@gmail.com` es delegado de "Club Demo". Quien carga la demo queda como juez jefe.
 
 Volver a cargarla la reinicia: los resultados anotados durante una demo vuelven a su valor inicial. Las apelaciones presentadas no se borran.

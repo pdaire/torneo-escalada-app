@@ -1,6 +1,7 @@
-// Competencia de demostración: seis categorías, clasificatoria cerrada y final en curso.
+// Competencia de demostración: seis categorías, clasificatoria y semifinal cerradas,
+// final en curso en Mujeres Adultas.
 // Todo es determinístico: cargar la demo dos veces produce los mismos resultados.
-import { ordenDeSalida, rankingPorCategoria } from '../utils/ranking';
+import { ordenDeSalida, posicionesDeRanking, rankingPorCategoria } from '../utils/ranking';
 import { sumarMinutos } from '../utils/competicion';
 
 export const DEMO_ID = 'demo';
@@ -8,63 +9,75 @@ export const DEMO_JUEZ = 'pdaire+juez1@gmail.com';
 export const DEMO_DELEGADO = 'pdaire+delegado1@gmail.com';
 export const CATEGORIA_EN_CURSO = 'mujeres-adultas';
 
-const CUPOS_FINAL = 6;
-// W de Women, M de Men.
-const BLOQUES_MUJERES = ['W1', 'W2', 'W3', 'W4'];
-const BLOQUES_HOMBRES = ['M1', 'M2', 'M3', 'M4'];
-
-function bloquesDe(categoria) {
-  return categoria.id.startsWith('mujeres') ? BLOQUES_MUJERES : BLOQUES_HOMBRES;
+// W de Women, M de Men: W1…Wn para mujeres y M1…Mn para hombres.
+function bloques(prefijo, cantidad) {
+  return Array.from({ length: cantidad }, (_, index) => `${prefijo}${index + 1}`);
 }
-const INTERVALO = 4;
+
+function bloquesDe(etapa, categoria) {
+  return bloques(categoria.id.startsWith('mujeres') ? 'W' : 'M', etapa.bloquesPorCategoria);
+}
 
 const CATEGORIAS = [
   {
     id: 'mujeres-sub-15', nombre: 'Mujeres Sub 15', dorsal: 101,
-    nombres: ['Antonia Rojas', 'Florencia Muñoz', 'Isidora Soto', 'Josefa Contreras', 'Martina Silva', 'Emilia Sepúlveda', 'Agustina Morales', 'Trinidad Fuentes'],
+    nombres: ['Antonia Rojas', 'Florencia Muñoz', 'Isidora Soto', 'Josefa Contreras', 'Martina Silva', 'Emilia Sepúlveda',
+      'Agustina Morales', 'Trinidad Fuentes', 'Rafaela Lillo', 'Maite Cárdenas', 'Julieta Garrido', 'Laura Peña'],
   },
   {
     id: 'hombres-sub-15', nombre: 'Hombres Sub 15', dorsal: 201,
-    nombres: ['Benjamín Araya', 'Vicente Espinoza', 'Agustín Castillo', 'Tomás Tapia', 'Maximiliano Reyes', 'Joaquín Pizarro', 'Mateo Vergara', 'Lucas Cortés'],
+    nombres: ['Benjamín Araya', 'Vicente Espinoza', 'Agustín Castillo', 'Tomás Tapia', 'Maximiliano Reyes', 'Joaquín Pizarro',
+      'Mateo Vergara', 'Lucas Cortés', 'Facundo Ortiz', 'Simón Godoy', 'Alonso Bustos', 'Emiliano Vidal'],
   },
   {
     id: 'mujeres-sub-17', nombre: 'Mujeres Sub 17', dorsal: 301,
-    nombres: ['Catalina Gutiérrez', 'Valentina Herrera', 'Fernanda Núñez', 'Javiera Bravo', 'Constanza Vega', 'Amanda Olivares', 'Ignacia Carrasco', 'Sofía Riquelme'],
+    nombres: ['Catalina Gutiérrez', 'Valentina Herrera', 'Fernanda Núñez', 'Javiera Bravo', 'Constanza Vega', 'Amanda Olivares',
+      'Ignacia Carrasco', 'Sofía Riquelme', 'Monserrat Day', 'Renata Sanhueza', 'Colomba Ruiz', 'Elisa Parra'],
   },
   {
     id: 'hombres-sub-17', nombre: 'Hombres Sub 17', dorsal: 401,
-    nombres: ['Martín Jara', 'Cristóbal Navarro', 'Diego Sandoval', 'Felipe Alarcón', 'Nicolás Valenzuela', 'Sebastián Cáceres', 'Gaspar Salazar', 'Bastián Orellana'],
+    nombres: ['Martín Jara', 'Cristóbal Navarro', 'Diego Sandoval', 'Felipe Alarcón', 'Nicolás Valenzuela', 'Sebastián Cáceres',
+      'Gaspar Salazar', 'Bastián Orellana', 'Renato Quiroz', 'Damián Moya', 'Clemente Arce', 'León Becerra'],
   },
   {
     id: 'mujeres-adultas', nombre: 'Mujeres Adultas', dorsal: 501,
-    nombres: ['Camila Figueroa', 'Daniela Paredes', 'Francisca Lagos', 'Carolina Ibáñez', 'Macarena Saavedra', 'Paula Henríquez', 'Bárbara Poblete', 'Natalia Zúñiga'],
+    nombres: ['Camila Figueroa', 'Daniela Paredes', 'Francisca Lagos', 'Carolina Ibáñez', 'Macarena Saavedra', 'Paula Henríquez',
+      'Bárbara Poblete', 'Natalia Zúñiga', 'Verónica Aravena', 'Pía Mella', 'Lorena Uribe', 'Andrea Fuenzalida'],
   },
   {
     id: 'hombres-adultos', nombre: 'Hombres Adultos', dorsal: 601,
-    nombres: ['Ignacio Toro', 'Rodrigo Cifuentes', 'Pablo Miranda', 'Andrés Aguilera', 'Gonzalo Escobar', 'Matías Gallardo', 'Francisco Molina', 'Javier Leiva'],
+    nombres: ['Ignacio Toro', 'Rodrigo Cifuentes', 'Pablo Miranda', 'Andrés Aguilera', 'Gonzalo Escobar', 'Matías Gallardo',
+      'Francisco Molina', 'Javier Leiva', 'Cristián Olave', 'Mauricio Rebolledo', 'Esteban Carvajal', 'Hernán Venegas'],
   },
 ];
 
-export const ETAPAS = {
-  clasificatoria: {
-    id: 'clasificatoria',
-    nombre: 'Clasificatoria',
-    tipo: 'qualis',
-    boulders: [...BLOQUES_MUJERES, ...BLOQUES_HOMBRES],
-    duracionTurno: 5,
-    etapaPreviaId: null,
-    inicio: '10:00',
+// En orden de competencia. `cupos`: cuántas por categoría entran a la etapa (null = todas).
+const RONDAS = [
+  {
+    id: 'clasificatoria', nombre: 'Clasificatoria', tipo: 'qualis', bloquesPorCategoria: 6,
+    duracionTurno: 5, etapaPreviaId: null, cupos: null, inicio: '09:00', separacionCategorias: 60,
   },
-  final: {
-    id: 'final',
-    nombre: 'Final',
-    tipo: 'final',
-    boulders: [...BLOQUES_MUJERES, ...BLOQUES_HOMBRES],
-    duracionTurno: INTERVALO,
-    etapaPreviaId: 'clasificatoria',
-    inicio: '15:00',
+  {
+    id: 'semifinal', nombre: 'Semifinal', tipo: 'semi', bloquesPorCategoria: 5,
+    duracionTurno: 5, etapaPreviaId: 'clasificatoria', cupos: 8, inicio: '13:00', separacionCategorias: 45,
   },
-};
+  {
+    id: 'final', nombre: 'Final', tipo: 'final', bloquesPorCategoria: 4,
+    duracionTurno: 4, etapaPreviaId: 'semifinal', cupos: 6, inicio: '16:30', separacionCategorias: 35,
+  },
+];
+
+export const ETAPA_ACTIVA = 'final';
+
+// Documentos de etapa tal como se guardan en Firestore.
+export const ETAPAS = Object.fromEntries(RONDAS.map((ronda) => [ronda.id, {
+  id: ronda.id,
+  nombre: ronda.nombre,
+  tipo: ronda.tipo,
+  boulders: [...bloques('W', ronda.bloquesPorCategoria), ...bloques('M', ronda.bloquesPorCategoria)],
+  duracionTurno: ronda.duracionTurno,
+  etapaPreviaId: ronda.etapaPreviaId,
+}]));
 
 function generador(semilla) {
   let estado = semilla >>> 0;
@@ -97,6 +110,18 @@ function simularBloque(azar, nivel, dificultad, maxIntentos) {
   return { intentos: topEnIntento ?? maxIntentos, zonaEnIntento, topEnIntento };
 }
 
+function turno(etapaId, categoriaId, boulderId, competidorId, index, horaProgramada) {
+  return {
+    id: `${etapaId}-${boulderId}-${competidorId}`,
+    etapaId,
+    categoriaId,
+    boulderId,
+    competidorId,
+    orden: index + 1,
+    horaProgramada,
+  };
+}
+
 export function generarDemo() {
   const azar = generador(2026);
   const competidores = [];
@@ -113,80 +138,63 @@ export function generarDemo() {
 
   const turnos = [];
   const resultados = [];
+  const posicionesPorEtapa = {};
 
-  // Clasificatoria: todas las competidoras, en orden de dorsal. Cada categoría parte una hora después.
-  const clasificatoria = ETAPAS.clasificatoria;
-  CATEGORIAS.forEach((categoria, indiceCategoria) => {
-    const lista = competidores.filter((item) => item.categoriaId === categoria.id);
-    const inicioCategoria = sumarMinutos(clasificatoria.inicio, indiceCategoria * 60);
-    bloquesDe(categoria).forEach((boulderId, indiceBloque) => {
-      const dificultad = 0.15 + (azar() * 0.5);
-      lista.forEach((competidor, index) => {
-        turnos.push(turno(clasificatoria, categoria.id, boulderId, competidor.id, index,
-          sumarMinutos(inicioCategoria, (index + indiceBloque) * clasificatoria.duracionTurno)));
-        const maxIntentos = 3 + Math.floor(azar() * 4);
-        resultados.push({
-          etapaId: clasificatoria.id, competidorId: competidor.id, boulderId,
-          ...simularBloque(azar, nivel[competidor.id], dificultad, maxIntentos),
+  RONDAS.forEach((ronda) => {
+    // Ranking de la etapa previa, con su propio desempate, para elegir clasificadas.
+    const rankingPrevio = ronda.etapaPreviaId
+      ? rankingPorCategoria({
+        competidores, turnos, resultados, etapaId: ronda.etapaPreviaId,
+        posicionesPrevias: posicionesPorEtapa[RONDAS.find((r) => r.id === ronda.etapaPreviaId).etapaPreviaId] || new Map(),
+      })
+      : null;
+
+    CATEGORIAS.forEach((categoria, indiceCategoria) => {
+      // Clasificatoria en orden de dorsal; las demás, al revés del ranking previo.
+      const orden = rankingPrevio
+        ? ordenDeSalida(rankingPrevio.find((g) => g.categoriaId === categoria.id).filas, ronda.cupos).slice(-ronda.cupos)
+        : competidores.filter((c) => c.categoriaId === categoria.id);
+      const enCurso = ronda.id === ETAPA_ACTIVA && categoria.id === CATEGORIA_EN_CURSO;
+      const inicioCategoria = sumarMinutos(ronda.inicio, indiceCategoria * ronda.separacionCategorias);
+      const bloquesCategoria = bloquesDe(ronda, categoria);
+
+      bloquesCategoria.forEach((boulderId, indiceBloque) => {
+        const dificultad = 0.2 + (azar() * 0.5);
+        orden.forEach((competidor, index) => {
+          turnos.push(turno(ronda.id, categoria.id, boulderId, competidor.id, index,
+            sumarMinutos(inicioCategoria, (index + indiceBloque) * ronda.duracionTurno)));
+          // En la categoría en curso, la competidora `index` ya terminó los bloques
+          // anteriores a `n - index` y está escalando el siguiente.
+          const terminados = enCurso ? bloquesCategoria.length - index : bloquesCategoria.length;
+          if (indiceBloque < terminados) {
+            resultados.push({
+              etapaId: ronda.id, competidorId: competidor.id, boulderId,
+              ...simularBloque(azar, nivel[competidor.id], dificultad, 2 + Math.floor(azar() * 5)),
+            });
+          } else if (indiceBloque === terminados) {
+            const parcial = simularBloque(azar, nivel[competidor.id], dificultad, 1 + Math.floor(azar() * 2));
+            resultados.push({
+              etapaId: ronda.id, competidorId: competidor.id, boulderId,
+              intentos: parcial.intentos,
+              zonaEnIntento: parcial.zonaEnIntento,
+              topEnIntento: null,
+            });
+          }
         });
       });
     });
-  });
 
-  // Final: las primeras de cada categoría en la clasificatoria, en orden inverso al ranking.
-  const final = ETAPAS.final;
-  const rankingClasificatoria = rankingPorCategoria({
-    competidores, turnos, resultados, etapaId: clasificatoria.id,
-  });
-  CATEGORIAS.forEach((categoria, indiceCategoria) => {
-    const grupo = rankingClasificatoria.find((item) => item.categoriaId === categoria.id);
-    const orden = ordenDeSalida(grupo.filas, CUPOS_FINAL).slice(-CUPOS_FINAL);
-    const enCurso = categoria.id === CATEGORIA_EN_CURSO;
-    const inicioCategoria = sumarMinutos(final.inicio, indiceCategoria * 45);
-    const bloques = bloquesDe(categoria);
-    bloques.forEach((boulderId, indiceBloque) => {
-      const dificultad = 0.3 + (azar() * 0.45);
-      orden.forEach((fila, index) => {
-        turnos.push(turno(final, categoria.id, boulderId, fila.id, index,
-          sumarMinutos(inicioCategoria, (index + indiceBloque) * INTERVALO)));
-        // En la categoría en curso, la competidora `index` ya terminó los bloques
-        // anteriores a `4 - index` y está escalando el siguiente.
-        const bloquesTerminados = enCurso ? bloques.length - index : bloques.length;
-        if (indiceBloque < bloquesTerminados) {
-          const maxIntentos = 2 + Math.floor(azar() * 4);
-          resultados.push({
-            etapaId: final.id, competidorId: fila.id, boulderId,
-            ...simularBloque(azar, nivel[fila.id], dificultad, maxIntentos),
-          });
-        } else if (indiceBloque === bloquesTerminados) {
-          const parcial = simularBloque(azar, nivel[fila.id], dificultad, 1 + Math.floor(azar() * 2));
-          resultados.push({
-            etapaId: final.id, competidorId: fila.id, boulderId,
-            intentos: parcial.intentos,
-            zonaEnIntento: parcial.zonaEnIntento,
-            topEnIntento: null,
-          });
-        }
-      });
-    });
+    posicionesPorEtapa[ronda.id] = posicionesDeRanking(rankingPorCategoria({
+      competidores, turnos, resultados, etapaId: ronda.id,
+      posicionesPrevias: posicionesPorEtapa[ronda.etapaPreviaId] || new Map(),
+    }));
   });
 
   return {
     competidores,
     turnos,
     resultados,
+    etapasCerradas: RONDAS.map((r) => r.id).filter((id) => id !== ETAPA_ACTIVA),
     categoriasCerradasFinal: CATEGORIAS.map((item) => item.id).filter((id) => id !== CATEGORIA_EN_CURSO),
-  };
-}
-
-function turno(etapa, categoriaId, boulderId, competidorId, index, horaProgramada) {
-  return {
-    id: `${etapa.id}-${boulderId}-${competidorId}`,
-    etapaId: etapa.id,
-    categoriaId,
-    boulderId,
-    competidorId,
-    orden: index + 1,
-    horaProgramada,
   };
 }

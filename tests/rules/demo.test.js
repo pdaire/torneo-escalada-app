@@ -30,6 +30,9 @@ describe('competencia demo', () => {
     const final = (await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/final`))).data();
     expect(final.categoriasCerradas).toHaveLength(5);
     expect((await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/clasificatoria`))).data().estado).toBe('cerrada');
+    expect((await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/semifinal`))).data().estado).toBe('cerrada');
+    expect(final.estado).toBe('abierta');
+    expect(final.etapaPreviaId).toBe('semifinal');
     expect(await resultadosDemo()).toHaveLength(generarDemo().resultados.length);
   });
 

@@ -55,12 +55,11 @@ export function validarResultado({ intentos, zonaEnIntento, topEnIntento }) {
   return '';
 }
 
-// Escribe el resultado y su entrada de historial en un solo batch.
+// Agrega a un batch el resultado y su entrada de historial.
 // `marcador.version` tiene que ser la versión anterior + 1: las reglas rechazan
 // una escritura basada en un estado viejo.
-export function guardarResultado(db, clave, marcador, accion, autor) {
+export function agregarResultado(batch, db, clave, marcador, accion, autor) {
   const ref = resultadoDocRef(db, clave);
-  const batch = writeBatch(db);
   batch.set(ref, {
     competenciaId: clave.competenciaId,
     etapaId: clave.etapaId,
@@ -82,5 +81,10 @@ export function guardarResultado(db, clave, marcador, accion, autor) {
     autor,
     en: serverTimestamp(),
   });
+}
+
+export function guardarResultado(db, clave, marcador, accion, autor) {
+  const batch = writeBatch(db);
+  agregarResultado(batch, db, clave, marcador, accion, autor);
   return batch.commit();
 }
