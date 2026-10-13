@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-La app queda en http://127.0.0.1:5173/.
+La app queda en http://127.0.0.1:5173/. Usa la base de datos real: lo que se anote ahí se ve en el sitio publicado. Para probar sin tocarla, ver [Demo local](#demo-local).
 
 ## Firebase CLI
 
@@ -27,13 +27,13 @@ Usa el mismo prefijo para `firebase init` y `firebase deploy`.
 
 `firebase.json` publica la carpeta `dist` de Vite y reescribe todas las rutas a `index.html`, para que `/juez` y `/admin` funcionen al recargar.
 
-Al fusionar en `main`, GitHub Actions corre `npm ci && npm run build` y publica el canal en vivo: https://torneo-escalada-app.web.app/
+Al fusionar en `main`, GitHub Actions corre `npm ci && npm test && npm run build` y publica el canal en vivo: https://torneo-escalada-app.web.app/
 
 Un pull request genera una vista previa y no toca el sitio público. El secreto del deploy es `FIREBASE_SERVICE_ACCOUNT_TORNEO_ESCALADA_APP`.
 
 ## Reglas de Firestore
 
-El archivo versionado es `firestore.rules`. Hay que publicarlo en la consola de Firebase o con `firebase deploy --only firestore:rules`. Si las reglas del proyecto no coinciden con ese archivo, administrar y anotar fallan con permiso denegado. La lectura de una colección vacía sí funciona, y el tablero queda sin etapa activa.
+El archivo versionado es `firestore.rules`. El deploy de GitHub Actions **no** lo publica: hay que pegarlo en la consola de Firebase (*Firestore → Reglas*) o correr `firebase deploy --only firestore:rules`. Si las reglas del proyecto no coinciden con ese archivo, administrar y anotar fallan con permiso denegado. La lectura de una colección vacía sí funciona, y el tablero queda sin etapa activa.
 
 Las reglas se apoyan en roles. Hay que publicarlas junto con el código que las usa.
 
@@ -42,7 +42,7 @@ Las reglas se apoyan en roles. Hay que publicarlas junto con el código que las 
 Una sola vez, en la consola de Firebase:
 
 1. **Authentication → Settings → User actions:** desactivar *Enable create (sign-up)*. Si queda activo, cualquiera puede crear una cuenta con la API key pública. Las cuentas se crean en *Authentication → Users*.
-2. **Firestore:** crear el documento `admins/{correo}` (correo en minúsculas, sin campos) para cada administrador.
+2. **Firestore:** crear la colección `admins` y, dentro, un documento por administrador cuyo ID sea su correo en minúsculas. Si la consola pide un campo, cualquiera sirve (por ejemplo `nombre`); la app solo revisa que el documento exista. La contraseña no va aquí: se define al crear el usuario en *Authentication → Users*.
 3. En `/admin`, agregar a cada juez, juez jefe y delegado en **Jueces y delegados** de cada competencia, y asignar bloques a los jueces.
 
 Las asignaciones viejas (`asignaciones` dentro de la etapa) ya no se usan. Hay que volver a cargarlas como miembros.

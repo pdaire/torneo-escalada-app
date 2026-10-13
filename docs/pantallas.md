@@ -63,7 +63,7 @@ El nombre de la etapa lleva a esa pestaña del tablero, filtrada por su categor�
 7. **Editar** corrige el marcador después de un error o una apelación aceptada.
 8. **Apelaciones** muestra las que están en evaluación. Solo el juez jefe puede aceptarlas o rechazarlas.
 
-Sin red, la tablet sigue anotando y avisa que hay cambios pendientes de sincronizar. Si la etapa está cerrada, los botones quedan deshabilitados.
+Sin red, la tablet sigue anotando y avisa que hay cambios pendientes de sincronizar. Si la etapa está cerrada o la categoría de la competidora está finalizada, los botones quedan deshabilitados y la tablet lo explica.
 
 Sin una etapa activa, la pantalla pide ir a administrar.
 
@@ -96,7 +96,7 @@ Solo para cuentas que están en `admins`.
 
 Volver a cargarla la reinicia: los resultados anotados durante una demo vuelven a su valor inicial. Las apelaciones presentadas no se borran.
 
-La carga tarda alrededor de un minuto y muestra su avance en el botón. No hay que cerrar ni recargar la pestaña mientras tanto. Si se corta, la demo queda a medias (etapas abiertas, faltan resultados de la final): basta con volver a cargarla.
+La carga escribe unos 800 resultados y muestra su avance en el botón. No hay que cerrar ni recargar la pestaña mientras tanto. Si se corta, la demo queda a medias (etapas abiertas, faltan resultados de la final): basta con volver a cargarla.
 
 ## Delegados `/delegado`
 
@@ -104,7 +104,7 @@ El delegado entra con correo y PIN de Firebase Auth. La cuenta tiene que ser del
 
 Puede presentar:
 
-- **Resultado particular:** elige competidora y bloque, ve el resultado actual y explica en el texto qué debe corregirse.
+- **Resultado particular:** elige competidora y bloque (solo los de su categoría), ve el resultado actual y explica en el texto qué debe corregirse.
 - **Situación general:** describe una condición que afectó la competencia completa o una parte de ella, sin asociarla a una competidora.
 
 Puede guardar un borrador y enviarlo después a evaluación. Ve solo sus propias apelaciones. En la tablet, el juez jefe ve las apelaciones en evaluación y las acepta o rechaza. Esa decisión no cambia el marcador: si la acepta, corrige el resultado con Editar.
