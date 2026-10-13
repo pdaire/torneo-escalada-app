@@ -20,6 +20,8 @@ describe('generarDemo', () => {
   it('la clasificatoria es una ronda americana de 24 bloques, con sectores y sin turnos', () => {
     const clasificatoria = ETAPAS.clasificatoria;
     expect(clasificatoria).toMatchObject({ formato: 'americana', maxIntentos: 5, mejoresBloques: 5 });
+    expect(clasificatoria.tablaPuntos.B1).toEqual([10, 8, 6, 4, 2]);
+    expect(clasificatoria.tablaPuntos.B24).toEqual([56, 54, 52, 50, 48]);
     expect(clasificatoria.boulders).toHaveLength(24);
     expect(Object.values(clasificatoria.sectores).flat().sort()).toEqual(clasificatoria.boulders.slice().sort());
     expect(demo.turnos.some((t) => t.etapaId === 'clasificatoria')).toBe(false);

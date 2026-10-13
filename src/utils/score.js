@@ -25,11 +25,11 @@ export function formatearPuntos(decimas) {
 /**
  * Ronda americana
  * Bloques numerados por dificultad (B1 el más fácil). Sin zonas: solo cuenta encadenar.
- * - Bloque N encadenado en el intento k: base + incremento × (N - 1) - descuento × (k - 1)
- *   Con los valores por defecto, B1 vale 10, 8, 6, 4, 2 y B24 vale 56, 54, 52, 50, 48.
+ * - Los puntos de cada bloque según el intento salen de la tabla de la etapa
+ *   (`tablaPuntos`: { B1: [10, 8, 6, 4, 2], … }), que definen los organizadores.
+ *   Una etapa sin tabla usa la fórmula base + incremento × (N - 1) - descuento × (k - 1).
  * - Máximo de intentos por bloque (5): después ya no puntúa.
  * - El total es la suma de los mejores bloques (5).
- * Los puntos son enteros: no hace falta trabajar en décimas.
  */
 
 export const FORMATOS = {
@@ -50,15 +50,21 @@ export function esAmericana(etapa) {
 }
 
 export function reglasAmericana(etapa) {
-  return Object.fromEntries(Object.entries(AMERICANA_POR_DEFECTO)
+  const reglas = Object.fromEntries(Object.entries(AMERICANA_POR_DEFECTO)
     .map(([clave, valor]) => [clave, Number.isFinite(etapa?.[clave]) ? etapa[clave] : valor]));
+  if (etapa?.tablaPuntos && !Number.isFinite(etapa.maxIntentos)) {
+    reglas.maxIntentos = Math.max(0, ...Object.values(etapa.tablaPuntos).map((puntos) => puntos.length));
+  }
+  return reglas;
 }
 
 // Puntos de encadenar el bloque en el intento `intento` (sin importar si ya pasó).
 export function puntosAmericana(etapa, boulderId, intento) {
-  const numero = (etapa?.boulders || []).indexOf(boulderId) + 1;
   const reglas = reglasAmericana(etapa);
-  if (numero < 1 || intento < 1 || intento > reglas.maxIntentos) return 0;
+  if (intento < 1 || intento > reglas.maxIntentos) return 0;
+  if (etapa?.tablaPuntos) return etapa.tablaPuntos[boulderId]?.[intento - 1] ?? 0;
+  const numero = (etapa?.boulders || []).indexOf(boulderId) + 1;
+  if (numero < 1) return 0;
   return Math.max(0, reglas.puntajeBase + (reglas.incrementoPorBloque * (numero - 1)) - (reglas.descuentoPorIntento * (intento - 1)));
 }
 

@@ -68,26 +68,26 @@ Formato masivo y dinámico, típico de campeonatos amateur o de clasificatorias:
 
 ### Puntos
 
-| Regla | Valor por defecto |
-| --- | --- |
-| B1 encadenado al 1.er intento | 10 |
-| Cada bloque siguiente vale | 2 más |
-| Cada intento fallido descuenta | 2 |
-| Máximo de intentos por bloque | 5 |
-| Bloques que suman al total | los 5 mejores |
+Cada etapa americana tiene su **tabla de puntos**: cuántos puntos da cada bloque según el intento en que se encadena. La definen los organizadores y no tiene que seguir ninguna fórmula. Por ejemplo:
 
-Bloque N encadenado en el intento k: `10 + 2 × (N − 1) − 2 × (k − 1)`. Con 24 bloques queda la cartilla de siempre:
+| Bloque | 1 | 2 | 3 | 4 |
+| --- | --- | --- | --- | --- |
+| 1 | 100 | 70 | 50 | 30 |
+| 2 | 120 | 90 | 60 | 40 |
+| 6 | 600 | 400 | 250 | |
 
-| Bloque | 1 | 2 | 3 | 4 | 5 |
-| --- | --- | --- | --- | --- | --- |
-| B1 | 10 | 8 | 6 | 4 | 2 |
-| B2 | 12 | 10 | 8 | 6 | 4 |
-| … | | | | | |
-| B24 | 56 | 54 | 52 | 50 | 48 |
+La cantidad de columnas define el máximo de intentos. Un intento sin valor en la tabla (como el 4.º del bloque 6) vale 0.
 
-No hay zonas: solo cuenta encadenar. Sin encadenar en los 5 intentos, el bloque vale 0. Los cinco valores de la tabla se configuran en cada etapa.
+En `/admin` la tabla se crea de dos formas:
 
-El total es la suma de los 5 bloques con más puntos. Los empates comparten posición; si la etapa tiene etapa previa, desempata la posición en ella.
+- **Pegar CSV:** una fila por bloque con el número del bloque y los puntos por intento. Se puede copiar desde una planilla (tabulación, coma o punto y coma); el encabezado es opcional.
+- **Generar con fórmula:** un atajo para la cartilla clásica, `base + incremento × (N − 1) − descuento × (k − 1)`. Con 10, 2 y 2 queda B1 = 10 8 6 4 2 … B24 = 56 54 52 50 48.
+
+Después se revisa y edita con **Tabla de puntos**. Como los puntos no se guardan en los resultados, cambiar la tabla recalcula el tablero de inmediato.
+
+No hay zonas: solo cuenta encadenar. Sin encadenar dentro del máximo de intentos, el bloque vale 0.
+
+El total es la suma de los mejores bloques (5 por defecto; se configura en la etapa). Los empates comparten posición; si la etapa tiene etapa previa, desempata la posición en ella.
 
 ### Cómo anota el juez
 
@@ -97,6 +97,6 @@ El total es la suma de los 5 bloques con más puntos. Los empates comparten posi
 | ✓ Encadenó | Suma un intento y lo marca como encadenado. |
 | Deshacer | Quita el último intento (y el encadenado, si lo había). |
 
-Con el bloque encadenado o con los 5 intentos usados, ✗ y ✓ quedan deshabilitados. Las reglas de Firestore rechazan más intentos que el máximo y un encadenado que no sea el último intento.
+Con el bloque encadenado o con el máximo de intentos usado, ✗ y ✓ quedan deshabilitados. Las reglas de Firestore rechazan más intentos que el máximo y un encadenado que no sea el último intento.
 
-El cálculo está en `src/utils/score.js` (`puntosAmericana`, `puntajeDeEtapa`).
+El cálculo está en `src/utils/score.js` (`puntosAmericana`, `puntajeDeEtapa`) y la lectura de la tabla en `src/utils/tablaPuntos.js`.

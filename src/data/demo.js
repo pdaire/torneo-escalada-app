@@ -4,7 +4,7 @@
 import { ordenDeSalida, posicionesDeRanking, rankingPorCategoria } from '../utils/ranking';
 import { sumarMinutos } from '../utils/competicion';
 import { AMERICANA_POR_DEFECTO } from '../utils/score';
-import { bloquesAmericana } from '../utils/sectores';
+import { generarTablaPuntos } from '../utils/tablaPuntos';
 
 export const DEMO_ID = 'demo';
 export const DEMO_JUEZ = 'pdaire+juez1@gmail.com';
@@ -85,8 +85,17 @@ function sectoresDemo(boulders) {
 export const ETAPAS = Object.fromEntries(RONDAS.map((ronda) => {
   const base = { id: ronda.id, nombre: ronda.nombre, tipo: ronda.tipo, etapaPreviaId: ronda.etapaPreviaId };
   if (ronda.formato === 'americana') {
-    const boulders = bloquesAmericana(ronda.bloquesAmericana);
-    return [ronda.id, { ...base, formato: 'americana', boulders, sectores: sectoresDemo(boulders), ...AMERICANA_POR_DEFECTO }];
+    // La tabla de la cartilla clásica, guardada explícita como si la hubieran pegado.
+    const { boulders, tabla, maxIntentos } = generarTablaPuntos({ ...AMERICANA_POR_DEFECTO, cantidad: ronda.bloquesAmericana });
+    return [ronda.id, {
+      ...base,
+      formato: 'americana',
+      boulders,
+      tablaPuntos: tabla,
+      maxIntentos,
+      mejoresBloques: AMERICANA_POR_DEFECTO.mejoresBloques,
+      sectores: sectoresDemo(boulders),
+    }];
   }
   return [ronda.id, {
     ...base,

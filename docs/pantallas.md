@@ -107,7 +107,7 @@ Solo para cuentas que están en `admins`.
 2. Marcar una competencia como activa. Solo una queda activa.
 3. Agregar etapas (qualis, semifinal, final) con su formato y, si corresponde, la etapa previa.
    - **World Climbing:** bloques (por ejemplo W1–W4, M1–M4) y duración del turno.
-   - **Ronda americana:** cantidad de bloques (B1…BN), tabla de puntos (B1 al primer intento, + por bloque, − por intento), máximo de intentos, cuántos bloques suman y sectores (`A: 1, 8, 23, 32; B: 2, 9, 16`). Los sectores se pueden editar después con **Sectores**. No tiene orden de paso.
+   - **Ronda americana:** tabla de puntos (pegada como CSV o generada con la fórmula de la cartilla clásica), cuántos bloques suman y sectores (`A: 1, 8, 23, 32; B: 2, 9, 16`). La tabla y los sectores se editan después con **Tabla de puntos** y **Sectores**. No tiene orden de paso. Ver [Puntuación](puntuacion.md#ronda-americana).
 
     Marcar una como activa. **Cerrar** bloquea los resultados de la etapa. En una etapa abierta, cada categoría se puede **finalizar** por separado.
 4. Cargar competidores uno a uno o con CSV `dorsal,nombre,categoria`. Una competidora con resultados no se puede quitar.
