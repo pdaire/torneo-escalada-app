@@ -70,6 +70,6 @@ npm test             # puntaje, validación y ranking
 npm run test:rules   # reglas de Firestore en el emulador
 ```
 
-`test:rules` necesita Java en el PATH (por ejemplo `brew install openjdk` y `PATH=/opt/homebrew/opt/openjdk/bin:$PATH`). Usa el proyecto de prueba `demo-torneo`, así que no toca datos reales. En esta red, anteponer `NODE_OPTIONS=--use-system-ca`.
+`test:rules` y `demo:local` necesitan Java: `brew install openjdk`. Los scripts ya agregan el Java de Homebrew al PATH y usan los certificados del sistema (`NODE_OPTIONS=--use-system-ca`), así que no hay que configurar nada más. Usan el proyecto de prueba `demo-torneo` y no tocan datos reales.
 
 GitHub Actions corre `npm test` antes de cada build.

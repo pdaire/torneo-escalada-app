@@ -9,8 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run src",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-torneo 'vitest run tests/rules'",
-    "demo:local": "firebase emulators:exec --only firestore,auth --project demo-torneo 'vitest run scripts && VITE_EMULADOR=1 vite --port 5174'"
+    "test:rules": "PATH=/opt/homebrew/opt/openjdk/bin:$PATH NODE_OPTIONS=--use-system-ca firebase emulators:exec --only firestore --project demo-torneo 'vitest run tests/rules'",
+    "demo:local": "PATH=/opt/homebrew/opt/openjdk/bin:$PATH NODE_OPTIONS=--use-system-ca firebase emulators:exec --only firestore,auth --project demo-torneo 'vitest run scripts && VITE_EMULADOR=1 vite --port 5174'"
   },
   "dependencies": {
     "firebase": "^13.0.0",
