@@ -117,6 +117,11 @@ describe('resultados', () => {
     }));
   });
 
+  it('nadie borra resultados, ni el admin', async () => {
+    await permitido(guardarResultado(usuario('juez@club.cl'), clave, marcador(1), 'intento', 'juez@club.cl'));
+    await denegado(deleteDoc(doc(usuario('admin@club.cl'), `resultados/${idRes}`)));
+  });
+
   it('el público lee resultados', async () => {
     await permitido(guardarResultado(usuario('juez@club.cl'), clave, marcador(1), 'intento', 'juez@club.cl'));
     await permitido(getDocs(query(collection(anonimo(), 'resultados'), where('competenciaId', '==', C), where('etapaId', '==', 'final'))));

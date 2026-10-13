@@ -179,7 +179,7 @@ El archivo es `firestore.rules` y los tests están en `tests/rules/`.
 - El público lee competencias, etapas, competidoras, turnos y resultados.
 - Solo un admin escribe la configuración de una competencia.
 - Un juez escribe resultados solo en sus bloques asignados, con un marcador válido, en una etapa abierta y en una categoría no finalizada. El juez jefe, en cualquier bloque.
-- El historial es solo-agregar y lo leen los jueces de la competencia.
+- Los resultados no se borran, ni siquiera el admin. El historial es solo-agregar y lo leen los jueces de la competencia.
 - Un delegado crea apelaciones con su propio correo, edita sus borradores y lee solo las suyas.
 - Solo el juez jefe resuelve una apelación, y nunca una propia.
 - Nadie borra apelaciones ni historial.

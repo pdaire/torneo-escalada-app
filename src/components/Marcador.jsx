@@ -26,11 +26,12 @@ export function MarcaBoulder({ boulder }) {
   );
 }
 
-// Etiqueta de una categoría en una etapa.
-export function EstadoCategoria({ finalizada }) {
+// Etiqueta de una categoría en una etapa: 'en_curso', 'finalizada' o nada.
+export function EstadoCategoria({ estado }) {
+  if (!estado) return null;
   return (
-    <span className={finalizada ? 'estado-categoria' : 'estado-categoria en-curso'}>
-      {finalizada ? 'Finalizada' : 'En curso'}
+    <span className={estado === 'en_curso' ? 'estado-categoria en-curso' : 'estado-categoria'}>
+      {estado === 'en_curso' ? 'En curso' : 'Finalizada'}
     </span>
   );
 }

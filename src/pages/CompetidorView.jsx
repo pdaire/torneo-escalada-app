@@ -39,8 +39,8 @@ function TarjetaEtapa({ item }) {
     <section className="ficha-etapa">
       <div className="ficha-etapa-encabezado">
         <h2>
-          <Link to={etapa.activa ? '/' : `/?etapa=${etapa.id}`}>{etapa.nombre}</Link>
-          <EstadoCategoria finalizada={item.categoriaFinalizada} />
+          <Link to={`/?${new URLSearchParams({ ...(etapa.activa ? {} : { etapa: etapa.id }), categoria: item.categoriaId })}`}>{etapa.nombre}</Link>
+          <EstadoCategoria estado={item.estado} />
         </h2>
         <p className="ficha-resumen">
           <span className={item.posicion === 1 && item.decimas > 0 ? 'oro' : ''}>{item.posicion}°</span>

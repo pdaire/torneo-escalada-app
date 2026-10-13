@@ -10,9 +10,26 @@
 
 ## Tablero `/`
 
-Muestra la competencia activa. Arriba hay una pestaña por etapa, en orden de competencia (clasificatoria, semifinal, final). La etapa activa está marcada **En vivo** y es la que se abre por defecto. Las demás muestran sus resultados finales; la etapa elegida queda en la dirección (`/?etapa=semifinal`), así que el enlace se puede compartir.
+Muestra la competencia activa. Arriba hay una pestaña por etapa, en orden de competencia (clasificatoria, semifinal, final). La etapa activa está marcada **En vivo** y es la que se abre por defecto. Debajo, un filtro por categoría (**Todas** por defecto).
 
-Hay una tabla por categoría, marcada como **En curso** o **Finalizada**. Las categorías en curso van primero. Cada tabla lista a todas las competidoras que tienen un turno en esa etapa, aunque todavía no tengan puntaje, y muestra solo los bloques de esa categoría.
+La etapa y la categoría elegidas quedan en la dirección, así que el enlace se puede compartir:
+
+```text
+/?etapa=clasificatoria&categoria=mujeres-sub-15
+/?categoria=mujeres-adultas          (etapa activa, una categoría)
+```
+
+`categoria` es el id de la categoría (el nombre en minúsculas con guiones). Un valor que no existe muestra todas.
+
+Hay una tabla por categoría. La etiqueta de cada una indica:
+
+| Etiqueta | Cuándo |
+| --- | --- |
+| **En curso** | Solo en la etapa activa, si la categoría no está finalizada. |
+| **Finalizada** | La etapa está cerrada o la categoría se finalizó en `/admin`. |
+| Sin etiqueta | Etapa que no está activa ni cerrada (todavía no empieza o nadie la cerró). |
+
+El encabezado sigue la misma lógica: **En vivo** en la etapa activa, **Resultados finales** en una etapa cerrada. Las categorías en curso van primero. Cada tabla lista a todas las competidoras que tienen un turno en esa etapa, aunque todavía no tengan puntaje, y muestra solo los bloques de esa categoría.
 
 Cada bloque muestra, como en las transmisiones de la IFSC, un rectángulo vacío, medio lleno o lleno según no haya zona, haya zona o haya top. Al lado van dos números:
 
@@ -33,7 +50,7 @@ Una tarjeta por etapa en que participa, en orden de competencia, con:
 - cada bloque con el intento de la zona, el del top, los intentos totales y los puntos;
 - los bloques que todavía no escala, con su hora programada.
 
-El nombre de la etapa lleva a esa pestaña del tablero.
+El nombre de la etapa lleva a esa pestaña del tablero, filtrada por su categoría.
 
 ## Tablet del juez `/juez`
 
@@ -78,6 +95,8 @@ Solo para cuentas que están en `admins`.
 - `pdaire+juez1@gmail.com` es juez de los ocho bloques de la final. `pdaire+delegado1@gmail.com` es delegado de "Club Demo". Quien carga la demo queda como juez jefe.
 
 Volver a cargarla la reinicia: los resultados anotados durante una demo vuelven a su valor inicial. Las apelaciones presentadas no se borran.
+
+La carga tarda alrededor de un minuto y muestra su avance en el botón. No hay que cerrar ni recargar la pestaña mientras tanto. Si se corta, la demo queda a medias (etapas abiertas, faltan resultados de la final): basta con volver a cargarla.
 
 ## Delegados `/delegado`
 

@@ -103,7 +103,8 @@ service cloud.firestore {
         && escrituraResultado(resultadoId, request.resource.data)
         && request.resource.data.version == resource.data.get('version', 0) + 1;
 
-      allow delete: if esAdmin();
+      // No se borran: el historial quedaría huérfano y el resultado no se podría volver a crear.
+      allow delete: if false;
 
       // Registro solo-agregar de cada cambio. Se escribe en el mismo batch que el resultado.
       match /historial/{entradaId} {

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { formatearPuntos } from '../utils/score';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
 import { useRankingEtapa } from '../hooks/useResultados';
-import { bloquesDeCategoria, ordenarEtapas } from '../utils/ranking';
+import { bloquesDeCategoria, estadoCategoria, ordenarEtapas } from '../utils/ranking';
 import { EstadoCategoria, MarcaBoulder } from '../components/Marcador';
 import './publico.css';
 
@@ -14,8 +14,25 @@ function bloquesVisibles(grupo, etapa, turnos) {
   return [...propios, ...[...conResultado].filter((id) => !propios.includes(id))];
 }
 
-function categoriaFinalizada(etapa, categoriaId) {
-  return etapa?.estado === 'cerrada' || Boolean(etapa?.categoriasCerradas?.includes(categoriaId));
+function FiltroCategorias({ grupos, seleccionada, onElegir }) {
+  if (grupos.length < 2) return null;
+  const opciones = [{ categoriaId: '', categoria: 'Todas' }, ...grupos.slice().sort((a, b) => a.categoria.localeCompare(b.categoria))];
+  return (
+    <nav aria-label="Categorías" className="pestanas pestanas-categorias">
+      {opciones.map((item) => {
+        const elegida = item.categoriaId === (seleccionada || '');
+        return (
+          <button
+            key={item.categoriaId || 'todas'}
+            onClick={() => onElegir(item.categoriaId)}
+            aria-current={elegida ? 'page' : undefined}
+            className={elegida ? 'pestana pestana-chica elegida' : 'pestana pestana-chica'}>
+            {item.categoria}
+          </button>
+        );
+      })}
+    </nav>
+  );
 }
 
 function PestanasEtapas({ etapas, seleccionada, onElegir }) {
@@ -46,7 +63,7 @@ function TablaCategoria({ grupo, etapa, turnos, conTitulo }) {
       {conTitulo && (
         <h2 className="categoria-titulo">
           {grupo.categoria}
-          <EstadoCategoria finalizada={categoriaFinalizada(etapa, grupo.categoriaId)} />
+          <EstadoCategoria estado={estadoCategoria(etapa, grupo.categoriaId)} />
         </h2>
       )}
       <div className="tabla-contenedor">
@@ -95,25 +112,37 @@ export default function PublicDashboard() {
     return () => document.body.classList.remove('public-board');
   }, []);
 
-  const elegirEtapa = (item) => {
-    setParametros(item.activa ? {} : { etapa: item.id }, { replace: true });
+  // La etapa y la categoría elegidas quedan en la URL: ?etapa=semifinal&categoria=mujeres-sub-15.
+  // Sin `etapa` se muestra la activa; sin `categoria`, todas.
+  const cambiarParametros = (cambios) => {
+    const siguientes = new URLSearchParams(parametros);
+    Object.entries(cambios).forEach(([clave, valor]) => {
+      if (valor) siguientes.set(clave, valor);
+      else siguientes.delete(clave);
+    });
+    setParametros(siguientes, { replace: true });
   };
+  const elegirEtapa = (item) => cambiarParametros({ etapa: item.activa ? '' : item.id });
+  const elegirCategoria = (categoriaId) => cambiarParametros({ categoria: categoriaId });
 
+  const categoriaElegida = grupos.some((g) => g.categoriaId === parametros.get('categoria')) ? parametros.get('categoria') : '';
   // Las categorías que siguen en curso van primero.
-  const ordenados = grupos.slice().sort((a, b) => (
-    Number(categoriaFinalizada(etapa, a.categoriaId)) - Number(categoriaFinalizada(etapa, b.categoriaId))
-  ));
+  const ordenados = grupos
+    .filter((g) => !categoriaElegida || g.categoriaId === categoriaElegida)
+    .sort((a, b) => Number(estadoCategoria(etapa, a.categoriaId) !== 'en_curso') - Number(estadoCategoria(etapa, b.categoriaId) !== 'en_curso'));
   const enVivo = etapa?.activa && etapa?.estado !== 'cerrada';
+  const encabezado = enVivo ? 'En vivo' : etapa?.estado === 'cerrada' ? 'Resultados finales' : '';
 
   return (
     <div className="publico">
       <header className="publico-encabezado">
-        {etapa && <p className={enVivo ? 'publico-kicker en-vivo' : 'publico-kicker'}>{enVivo ? 'En vivo' : 'Resultados finales'}</p>}
+        {encabezado && <p className={enVivo ? 'publico-kicker en-vivo' : 'publico-kicker'}>{encabezado}</p>}
         <h1 className="publico-titulo">{cargando ? 'Cargando…' : `Resultados${etapa ? ` ${etapa.nombre}` : ''}`}</h1>
         {competencia && <p className="publico-sub">{competencia.nombre}</p>}
       </header>
 
       <PestanasEtapas etapas={ordenarEtapas(etapas)} seleccionada={etapa} onElegir={elegirEtapa} />
+      {!cargandoResultados && <FiltroCategorias grupos={grupos} seleccionada={categoriaElegida} onElegir={elegirCategoria} />}
 
       {!cargando && ordenados.length === 0 && (
         <p className="publico-sub" style={{ textAlign: 'center', padding: '3rem 0' }}>
@@ -122,7 +151,7 @@ export default function PublicDashboard() {
       )}
 
       {!cargandoResultados && ordenados.map((grupo) => (
-        <TablaCategoria key={grupo.categoriaId} grupo={grupo} etapa={etapa} turnos={turnos} conTitulo={ordenados.length > 1} />
+        <TablaCategoria key={grupo.categoriaId} grupo={grupo} etapa={etapa} turnos={turnos} conTitulo={grupos.length > 1} />
       ))}
     </div>
   );

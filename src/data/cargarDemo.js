@@ -6,11 +6,13 @@ import { DEMO_DELEGADO, DEMO_ID, DEMO_JUEZ, ETAPA_ACTIVA, ETAPAS, generarDemo } 
 // Carga o reinicia la competencia demo y la deja activa.
 // Escribe con la sesión del admin, que queda como juez jefe de la demo: así los
 // resultados pasan por las mismas reglas que en una competencia real.
-export async function cargarDemo(db, correoAdmin, competencias) {
+// Si se corta a medias, volver a cargarla la completa: parte de las versiones vigentes.
+export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () => {}) {
   const { competidores, turnos, resultados, etapasCerradas, categoriasCerradasFinal } = generarDemo();
   const C = DEMO_ID;
 
   // 1. Competencia, etapas abiertas y miembros.
+  onProgreso('Configurando la competencia…');
   const config = writeBatch(db);
   config.set(competenciaRef(db, C), { nombre: 'Competencia demo', fecha: new Date().toISOString().slice(0, 10), activa: true });
   competencias
@@ -36,6 +38,7 @@ export async function cargarDemo(db, correoAdmin, competencias) {
 
   // 2. Competidoras y orden de paso (ids fijos: recargar la demo los sobrescribe).
   // Los turnos de una versión anterior de la demo que ya no existen se borran.
+  onProgreso('Cargando competidoras y orden de paso…');
   const plantel = writeBatch(db);
   competidores.forEach(({ id, ...competidor }) => plantel.set(doc(competidoresCol(db, C), id), competidor));
   await plantel.commit();
@@ -90,8 +93,10 @@ export async function cargarDemo(db, correoAdmin, competencias) {
     return lote.commit();
   });
   for (let inicio = 0; inicio < escrituras.length; inicio += 20) {
+    onProgreso(`Cargando resultados: ${inicio} de ${escrituras.length}…`);
     await Promise.all(escrituras.slice(inicio, inicio + 20).map((escribir) => escribir()));
   }
+  onProgreso('Cerrando etapas…');
 
   // 4. Cierra las rondas terminadas; en la final, todas las categorías menos la que está en curso.
   await Promise.all(etapasCerradas.map((id) => updateDoc(doc(etapasCol(db, C), id), { estado: 'cerrada' })));

@@ -67,6 +67,15 @@
   color: #121212;
 }
 
+.pestanas-categorias {
+  margin-top: -1rem;
+}
+
+.pestana-chica {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+}
+
 .pestana-vivo {
   margin-left: 0.5rem;
   color: #ff4757;

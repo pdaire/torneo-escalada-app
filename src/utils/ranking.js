@@ -95,6 +95,13 @@ export function bloquesDeCategoria(etapa, turnos, categoriaId) {
   return [...todos.filter((id) => usados.has(id)), ...[...usados].filter((id) => !todos.includes(id))];
 }
 
+// 'finalizada' si la etapa o la categoría están cerradas; 'en_curso' solo en la etapa
+// activa; null en una etapa que no está activa ni cerrada (pendiente o sin cerrar).
+export function estadoCategoria(etapa, categoriaId) {
+  if (etapa?.estado === 'cerrada' || etapa?.categoriasCerradas?.includes(categoriaId)) return 'finalizada';
+  return etapa?.activa ? 'en_curso' : null;
+}
+
 // Etapas en orden de competencia: primero las que no tienen etapa previa,
 // después cada una detrás de su etapa previa.
 export function ordenarEtapas(etapas) {
@@ -154,7 +161,8 @@ export function detalleCompetidor({ competidorId, etapas, competidores, turnos, 
       posicion: fila.posicion,
       decimas: fila.decimas,
       totalCategoria: grupo.filas.length,
-      categoriaFinalizada: etapa.estado === 'cerrada' || Boolean(etapa.categoriasCerradas?.includes(grupo.categoriaId)),
+      categoriaId: grupo.categoriaId,
+      estado: estadoCategoria(etapa, grupo.categoriaId),
       bloques,
     }];
   });

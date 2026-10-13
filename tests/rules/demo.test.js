@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { collection, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { cargarDemo } from '../../src/data/cargarDemo';
 import { DEMO_ID, generarDemo } from '../../src/data/demo';
 import { guardarResultado } from '../../src/utils/resultado';
@@ -56,6 +56,26 @@ describe('competencia demo', () => {
     await permitido(cargarDemo(usuario(ADMIN), ADMIN, []));
     const anotado = (await resultadosDemo()).find((r) => r.competidorId === pendiente.competidorId && r.boulderId === 'W1' && r.etapaId === 'final');
     expect(anotado).toMatchObject({ intentos: 0, topEnIntento: null, version: 2 });
+  });
+
+  it('una carga cortada a medias se completa al volver a cargar', async () => {
+    await cargarDemo(usuario(ADMIN), ADMIN, []);
+    // Simula una carga que se cortó antes de terminar: faltan resultados de la final
+    // y las etapas quedaron abiertas.
+    const db = sinReglas();
+    const faltantes = (await getDocs(query(collection(db, 'resultados'), where('competenciaId', '==', DEMO_ID), where('etapaId', '==', 'final'))))
+      .docs.filter((item) => item.id.includes('mujeres-adultas') || item.id.includes('hombres-adultos'));
+    // El resultado y su historial van en el mismo batch: si el batch no llegó, no existe ninguno.
+    await Promise.all(faltantes.flatMap((item) => [deleteDoc(item.ref), deleteDoc(doc(item.ref, 'historial', 'v1'))]));
+    for (const etapa of ['clasificatoria', 'semifinal', 'final']) {
+      await setDoc(doc(db, `competencias/${DEMO_ID}/etapas/${etapa}`), { estado: 'abierta', categoriasCerradas: [] }, { merge: true });
+    }
+
+    await permitido(cargarDemo(usuario(ADMIN), ADMIN, []));
+    expect(await resultadosDemo()).toHaveLength(generarDemo().resultados.length);
+    const publico = anonimo();
+    expect((await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/semifinal`))).data().estado).toBe('cerrada');
+    expect((await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/final`))).data().categoriasCerradas).toHaveLength(5);
   });
 
   it('alguien que no es admin no puede cargarla', async () => {

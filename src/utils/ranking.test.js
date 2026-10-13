@@ -135,11 +135,21 @@ describe('detalleCompetidor', () => {
     ];
     const detalle = detalleCompetidor({ competidorId: 'd1', etapas, competidores, turnos, resultados });
     expect(detalle.map((d) => d.etapa.id)).toEqual(['qualis', 'final']);
-    expect(detalle[0]).toMatchObject({ posicion: 2, totalCategoria: 2, decimas: 249, categoriaFinalizada: true });
-    expect(detalle[1].categoriaFinalizada).toBe(false);
+    expect(detalle[0]).toMatchObject({ posicion: 2, totalCategoria: 2, decimas: 249, estado: 'finalizada', categoriaId: 'damas' });
+    expect(detalle[1].estado).toBe(null);
     expect(detalle[1].bloques).toEqual([
       { boulderId: 'W1', intentos: 3, zonaEnIntento: 2, topEnIntento: null, decimas: 99, horaProgramada: '16:00', pendiente: false },
       { boulderId: 'W2', intentos: 0, zonaEnIntento: null, topEnIntento: null, decimas: 0, horaProgramada: '16:04', pendiente: true },
     ]);
+  });
+});
+
+describe('estadoCategoria', () => {
+  it('en curso solo en la etapa activa; finalizada si la etapa o la categoría están cerradas', async () => {
+    const { estadoCategoria } = await import('./ranking');
+    expect(estadoCategoria({ activa: true, estado: 'abierta', categoriasCerradas: [] }, 'damas')).toBe('en_curso');
+    expect(estadoCategoria({ activa: true, estado: 'abierta', categoriasCerradas: ['damas'] }, 'damas')).toBe('finalizada');
+    expect(estadoCategoria({ activa: false, estado: 'cerrada' }, 'damas')).toBe('finalizada');
+    expect(estadoCategoria({ activa: false, estado: 'abierta' }, 'damas')).toBe(null);
   });
 });

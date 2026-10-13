@@ -52,7 +52,7 @@ export default function AdminView() {
   const [etapaOrdenId, setEtapaOrdenId] = useState('');
   const [origenOrden, setOrigenOrden] = useState('categoria');
   const [asignacion, setAsignacion] = useState({ correo: '', etapaId: '' });
-  const [cargandoDemo, setCargandoDemo] = useState(false);
+  const [progresoDemo, setProgresoDemo] = useState('');
 
   useEffect(() => {
     document.body.classList.add('admin-mode');
@@ -169,11 +169,15 @@ export default function AdminView() {
     const pregunta = `¿Cargar la competencia demo y dejarla activa? El tablero público pasará a mostrarla. `
       + `Si ya existe, se reinicia: se pierden los resultados anotados en ella.`;
     if (!window.confirm(pregunta)) return;
-    setCargandoDemo(true);
+    setProgresoDemo('Empezando…');
     ejecutar(async () => {
-      await cargarDemo(db, correo, competencias);
+      try {
+        await cargarDemo(db, correo, competencias, setProgresoDemo);
+      } catch (err) {
+        throw new Error(`La demo quedó a medias (${err.code || err.message}). Vuelve a cargarla para completarla.`);
+      }
       setCompetenciaId(DEMO_ID);
-    }).finally(() => setCargandoDemo(false));
+    }).finally(() => setProgresoDemo(''));
   };
 
   const agregarCompetidor = (evento) => {
@@ -433,9 +437,10 @@ export default function AdminView() {
       <section className="admin-section">
         <h2>Competencia</h2>
         <div className="admin-row">
-          <button onClick={cargarCompetenciaDemo} disabled={cargandoDemo} className="admin-btn">
-            {cargandoDemo ? 'Cargando demo…' : 'Cargar o reiniciar competencia demo'}
+          <button onClick={cargarCompetenciaDemo} disabled={Boolean(progresoDemo)} className="admin-btn">
+            {progresoDemo || 'Cargar o reiniciar competencia demo'}
           </button>
+          {progresoDemo && <strong>No cierres ni recargues esta pestaña hasta que termine.</strong>}
           {import.meta.env.DEV && (
             <button onClick={importarEjemplo} className="admin-btn-secondary">Cargar ejemplo Baguales 2026</button>
           )}
