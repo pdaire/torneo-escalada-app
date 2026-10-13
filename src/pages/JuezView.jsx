@@ -13,6 +13,7 @@ import {
   validarResultado,
 } from '../utils/resultado';
 import { apelacionesCol } from '../utils/competicion';
+import { categoriasDeBloque } from '../utils/ranking';
 import { useEtapaActiva } from '../hooks/useEtapaActiva';
 import { useMiembro, useUsuario } from '../hooks/useSesion';
 
@@ -60,6 +61,7 @@ export default function JuezView() {
   const { competencia, etapa, competidores, turnos: turnosCrudos, cargando, error: errorConfig } = useEtapaActiva();
   const { miembro, cargando: cargandoMiembro } = useMiembro(user, competencia?.id);
   const [boulderId, setBoulderId] = useState('');
+  const [categoriaPedida, setCategoriaPedida] = useState('');
   const [turnoIndex, setTurnoIndex] = useState(0);
   const [competidorId, setCompetidorId] = useState(null);
   const [buscando, setBuscando] = useState(false);
@@ -81,9 +83,16 @@ export default function JuezView() {
   const asignados = miembro?.asignaciones?.[etapa?.id] || [];
   const boulders = (etapa?.boulders || []).filter((id) => esJuezJefe || asignados.includes(id));
   const competidoresPorId = Object.fromEntries(competidores.map((item) => [item.id, item]));
+  // Cada categoría tiene su propio orden de paso en el bloque. Sin elección válida,
+  // se abre la última categoría elegida en este bloque o la primera que sigue en curso.
+  const categorias = categoriasDeBloque(etapa, turnosCrudos, competidores, boulderId);
+  const categoriaValida = (id) => categorias.some((item) => item.categoriaId === id);
+  const categoriaGuardada = etapa ? leerPreferencia(`juez.categoria.${etapa.id}.${boulderId}`, '') : '';
+  const categoriaId = [categoriaPedida, categoriaGuardada].find(categoriaValida) || categorias[0]?.categoriaId || '';
   const turnos = turnosCrudos
-    .filter((turno) => etapa && turno.etapaId === etapa.id && turno.boulderId === boulderId && competidoresPorId[turno.competidorId])
-    .sort((a, b) => a.orden - b.orden)
+    .filter((turno) => etapa && turno.etapaId === etapa.id && turno.boulderId === boulderId
+      && (!categoriaId || turno.categoriaId === categoriaId) && competidoresPorId[turno.competidorId])
+    .sort((a, b) => a.orden - b.orden || String(a.horaProgramada).localeCompare(String(b.horaProgramada)))
     .map((turno) => ({ ...turno, hora: turno.horaProgramada, competidor: competidoresPorId[turno.competidorId] }));
   const turnoSeguro = turnos.length ? Math.min(turnoIndex, turnos.length - 1) : 0;
   const programada = turnos[turnoSeguro]?.competidor;
@@ -91,19 +100,26 @@ export default function JuezView() {
   const contextoRef = useRef({});
   contextoRef.current = { competidor, boulderId, competenciaId: competencia?.id, etapaId: etapa?.id };
   const bouldersClave = boulders.join(',');
+  // Un bloque queda terminado cuando todas las categorías que lo escalan están finalizadas.
+  const bloqueTerminado = (id) => {
+    const delBloque = categoriasDeBloque(etapa, turnosCrudos, competidores, id);
+    return etapaCerrada || (delBloque.length > 0 && delBloque.every((item) => item.finalizada));
+  };
+  const claveTurno = `juez.turno.${etapa?.id}.${boulderId}.${categoriaId}`;
 
   useEffect(() => {
     if (!etapa) return;
     const preferido = leerPreferencia(`juez.boulder.${etapa.id}`, '');
-    setBoulderId(boulders.includes(preferido) ? preferido : (boulders[0] || ''));
+    const enCurso = boulders.find((id) => !bloqueTerminado(id));
+    setBoulderId(boulders.includes(preferido) ? preferido : (enCurso || boulders[0] || ''));
   }, [etapa?.id, bouldersClave]);
 
   useEffect(() => {
     if (!etapa || !boulderId) return;
-    const guardado = Number(leerPreferencia(`juez.turno.${etapa.id}.${boulderId}`, '0'));
+    const guardado = Number(leerPreferencia(claveTurno, '0'));
     setTurnoIndex(Number.isInteger(guardado) ? guardado : 0);
     setCompetidorId(null);
-  }, [etapa?.id, boulderId]);
+  }, [claveTurno]);
 
   useEffect(() => {
     document.body.classList.add('kiosk-mode');
@@ -235,10 +251,17 @@ export default function JuezView() {
   };
 
   const elegirBoulder = (id) => {
-    const indiceGuardado = Number(leerPreferencia(`juez.turno.${etapa.id}.${id}`, '0'));
     guardarPreferencia(`juez.boulder.${etapa.id}`, id);
     setBoulderId(id);
-    setTurnoIndex(Number.isInteger(indiceGuardado) ? indiceGuardado : 0);
+    setCategoriaPedida('');
+    setCompetidorId(null);
+    setBuscando(false);
+    setDorsalBusqueda('');
+  };
+
+  const elegirCategoria = (id) => {
+    guardarPreferencia(`juez.categoria.${etapa.id}.${boulderId}`, id);
+    setCategoriaPedida(id);
     setCompetidorId(null);
     setBuscando(false);
     setDorsalBusqueda('');
@@ -247,7 +270,7 @@ export default function JuezView() {
   const fijarTurno = (indice) => {
     if (!turnos.length) return;
     const acotado = Math.max(0, Math.min(indice, turnos.length - 1));
-    guardarPreferencia(`juez.turno.${etapa.id}.${boulderId}`, String(acotado));
+    guardarPreferencia(claveTurno, String(acotado));
     setTurnoIndex(acotado);
     setCompetidorId(turnos[acotado].competidor.id);
     setBuscando(false);
@@ -323,19 +346,51 @@ export default function JuezView() {
   return (
     <div style={{ width: '100%', maxWidth: '100%', padding: '1rem', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', minHeight: '100svh', color: '#111', backgroundColor: '#fff', boxSizing: 'border-box', overflowX: 'hidden' }}>
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-        {boulders.map((id) => (
-          <button
-            key={id}
-            onClick={() => elegirBoulder(id)}
-            style={{ flex: 1, padding: '0.8rem', fontSize: '1.2rem', fontWeight: 'bold', borderRadius: '8px', border: 'none', backgroundColor: id === boulderId ? '#111' : '#e0e0e0', color: id === boulderId ? '#fff' : '#111' }}>
-            {id}
-          </button>
-        ))}
+        {boulders.map((id) => {
+          const terminado = bloqueTerminado(id);
+          return (
+            <button
+              key={id}
+              onClick={() => elegirBoulder(id)}
+              title={terminado ? 'Todas las categorías de este bloque están finalizadas' : undefined}
+              style={{ flex: 1, padding: '0.8rem', fontSize: '1.2rem', fontWeight: 'bold', borderRadius: '8px', border: 'none', backgroundColor: id === boulderId ? '#111' : '#e0e0e0', color: id === boulderId ? '#fff' : '#111', opacity: terminado && id !== boulderId ? 0.45 : 1 }}>
+              {id}
+            </button>
+          );
+        })}
       </div>
+
+      {boulders.every(bloqueTerminado) && (
+        <p style={{ margin: '0 0 0.75rem', padding: '0.75rem', borderRadius: '8px', backgroundColor: '#e7f1ff', fontWeight: 'bold' }}>
+          Todas tus categorías en {etapa.nombre} están finalizadas. La tablet anota en la etapa activa: cuando la organización active la siguiente, aparecerá aquí.
+        </p>
+      )}
+
+      {categorias.length > 1 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          {categorias.map((item) => {
+            const elegida = item.categoriaId === categoriaId;
+            return (
+              <button
+                key={item.categoriaId}
+                onClick={() => elegirCategoria(item.categoriaId)}
+                style={{
+                  padding: '0.6rem 0.9rem', fontSize: '1rem', fontWeight: 'bold', borderRadius: '999px',
+                  border: elegida ? '2px solid #111' : '2px solid #ccc',
+                  backgroundColor: elegida ? '#111' : '#fff', color: elegida ? '#fff' : (item.finalizada ? '#888' : '#111'),
+                }}>
+                {item.categoria}{item.finalizada ? ' · finalizada' : ''}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0f0f0', padding: '1rem', borderRadius: '8px', marginBottom: '0.75rem' }}>
         <div>
-          <h4 style={{ margin: 0, color: '#666' }}>{etapa.nombre} · {competencia.nombre} · {correo}{esJuezJefe ? ' · juez jefe' : ''}</h4>
+          <h4 style={{ margin: 0, color: '#666' }}>
+            {etapa.nombre}{categorias.length === 1 ? ` · ${categorias[0].categoria}` : ''} · {competencia.nombre} · {correo}{esJuezJefe ? ' · juez jefe' : ''}
+          </h4>
           {competidor ? (
             <>
               <h2 style={{ margin: '5px 0 0 0', fontSize: '2rem', color: '#111' }}>#{competidor.dorsal} {competidor.nombre}</h2>
@@ -382,10 +437,10 @@ export default function JuezView() {
         <div style={{ marginBottom: '0.75rem', minWidth: 0, maxWidth: '100%' }}>
           <p style={{ margin: '0 0 0.35rem', fontSize: '0.85rem', fontWeight: 'bold', color: '#555' }}>Después en este bloque</p>
           <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', minWidth: 0, maxWidth: '100%' }}>
-            {turnos.slice(turnoSeguro + 1).map((turno) => (
+            {turnos.slice(turnoSeguro + 1).map((turno, index) => (
               <button
                 key={turno.id}
-                onClick={() => fijarTurno(turno.orden - 1)}
+                onClick={() => fijarTurno(turnoSeguro + 1 + index)}
                 style={{ flex: '0 0 auto', padding: '0.55rem 0.7rem', borderRadius: '8px', border: '1px solid #ccc', backgroundColor: '#f4f4f4', color: '#111', fontWeight: 'bold' }}>
                 #{turno.competidor.dorsal} {turno.competidor.nombre} · {turno.hora}
               </button>

@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { connectFirestoreEmulator, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { connectAuthEmulator, getAuth } from "firebase/auth";
 
 // La configuración web de Firebase es pública: la seguridad está en firestore.rules.
 const firebaseConfig = {
@@ -12,8 +12,8 @@ const firebaseConfig = {
   appId: "1:766624450650:web:9ce24969ef5cc729e33063"
 };
 
-// `npm run demo:local` usa el emulador de Firestore con la competencia demo,
-// sin tocar la base real.
+// `npm run demo:local` usa los emuladores de Firestore y Authentication
+// con la competencia demo, sin tocar la base real.
 const emulador = import.meta.env.VITE_EMULADOR === '1';
 
 const app = initializeApp(emulador ? { ...firebaseConfig, projectId: "demo-torneo" } : firebaseConfig);
@@ -25,5 +25,8 @@ export const db = initializeFirestore(app, {
     ? memoryLocalCache()
     : persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
-if (emulador) connectFirestoreEmulator(db, "127.0.0.1", 8080);
 export const auth = getAuth(app);
+if (emulador) {
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+}

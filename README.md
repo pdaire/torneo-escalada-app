@@ -9,7 +9,7 @@ App para puntuar un torneo de búlder con el sistema de puntos IFSC y mostrar el
 ```bash
 npm install
 npm run dev          # app local contra la base real
-npm run demo:local   # app local con la competencia demo en el emulador
+npm run demo:local   # app local con la competencia demo en los emuladores (cuentas con clave demo1234)
 npm test             # puntaje, validación y ranking
 npm run test:rules   # reglas de Firestore en el emulador (necesita Java)
 ```

@@ -167,3 +167,19 @@ export function detalleCompetidor({ competidorId, etapas, competidores, turnos, 
     }];
   });
 }
+
+// Categorías que escalan un bloque en la etapa, según los turnos.
+// Las que siguen en curso van primero; después, por nombre.
+export function categoriasDeBloque(etapa, turnos, competidores, boulderId) {
+  const nombres = new Map(competidores.map((c) => [c.categoriaId, c.categoria]));
+  const ids = new Set(turnos
+    .filter((t) => t.etapaId === etapa?.id && t.boulderId === boulderId)
+    .map((t) => t.categoriaId));
+  return [...ids]
+    .map((categoriaId) => ({
+      categoriaId,
+      categoria: nombres.get(categoriaId) || categoriaId,
+      finalizada: estadoCategoria(etapa, categoriaId) === 'finalizada',
+    }))
+    .sort((a, b) => Number(a.finalizada) - Number(b.finalizada) || a.categoria.localeCompare(b.categoria));
+}

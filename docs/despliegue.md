@@ -53,7 +53,15 @@ Las asignaciones viejas (`asignaciones` dentro de la etapa) ya no se usan. Hay q
 npm run demo:local
 ```
 
-Levanta el emulador de Firestore, carga la competencia demo y abre la app en http://localhost:5174/ contra el emulador. No toca la base real y funciona sin internet. Sirve para mostrar el tablero y las fichas; el inicio de sesión (juez, delegado, admin) sigue usando Firebase Auth real, así que esas pantallas no funcionan en este modo. Necesita Java, igual que `test:rules`.
+Levanta los emuladores de Firestore y Authentication, carga la competencia demo y abre la app en http://localhost:5174/ contra ellos. No toca la base real y funciona sin internet. Todas las pantallas funcionan con estas cuentas, todas con la clave `demo1234`:
+
+| Cuenta | Rol en la demo |
+| --- | --- |
+| `admin@demo.local` | Admin y juez jefe |
+| `pdaire+juez1@gmail.com` | Juez de los 8 bloques de la final |
+| `pdaire+delegado1@gmail.com` | Delegado de "Club Demo" |
+
+Cada vez que se corre, la demo parte de cero. Necesita Java, igual que `test:rules`.
 
 ## Tests
 

@@ -55,15 +55,18 @@ El nombre de la etapa lleva a esa pestaña del tablero, filtrada por su categor�
 ## Tablet del juez `/juez`
 
 1. Entra con el correo y el PIN de Firebase Auth. La cuenta tiene que ser juez o juez jefe en la competencia activa.
-2. Elige el bloque entre los que tiene asignados en la etapa. El juez jefe ve todos. La elección se guarda en el navegador.
-3. **Siguiente** y **Anterior** recorren el orden de paso de ese bloque.
-4. **Buscar dorsal** elige a alguien fuera de ese orden. **Siguiente** no sigue a la persona buscada: vuelve al orden programado.
-5. **Después en este bloque** salta directo a una competidora que todavía no ha pasado.
-6. **+ Intento** suma un intento. **Marcar zona** y **Marcar top** no suman: guardan el intento actual. El top queda bloqueado para nuevos intentos.
-7. **Editar** corrige el marcador después de un error o una apelación aceptada.
-8. **Apelaciones** muestra las que están en evaluación. Solo el juez jefe puede aceptarlas o rechazarlas.
+2. Elige el bloque entre los que tiene asignados en la etapa. El juez jefe ve todos. Un bloque se ve atenuado cuando todas las categorías que lo escalan están finalizadas.
+3. Si varias categorías escalan ese bloque (por ejemplo M1 en Hombres Sub 15, Sub 17 y Adultos), elige la categoría. Cada una tiene su propio orden de paso. Por defecto se abre la que sigue en curso; las finalizadas aparecen marcadas. Bloque, categoría y turno se recuerdan en el navegador.
+4. **Siguiente** y **Anterior** recorren el orden de paso de esa categoría en ese bloque.
+5. **Buscar dorsal** elige a alguien fuera de ese orden. **Siguiente** no sigue a la persona buscada: vuelve al orden programado.
+6. **Después en este bloque** salta directo a una competidora que todavía no ha pasado.
+7. **+ Intento** suma un intento. **Marcar zona** y **Marcar top** no suman: guardan el intento actual. El top queda bloqueado para nuevos intentos.
+8. **Editar** corrige el marcador después de un error o una apelación aceptada.
+9. **Apelaciones** muestra las que están en evaluación. Solo el juez jefe puede aceptarlas o rechazarlas.
 
 Sin red, la tablet sigue anotando y avisa que hay cambios pendientes de sincronizar. Si la etapa está cerrada o la categoría de la competidora está finalizada, los botones quedan deshabilitados y la tablet lo explica.
+
+La tablet anota solo en la etapa activa. No se cambia de etapa desde aquí: la etapa activa la elige la organización en `/admin`, y las etapas cerradas no se pueden modificar. Cuando todo lo del juez en la etapa está finalizado, la tablet lo avisa.
 
 Sin una etapa activa, la pantalla pide ir a administrar.
 

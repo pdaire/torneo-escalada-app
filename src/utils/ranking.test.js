@@ -153,3 +153,21 @@ describe('estadoCategoria', () => {
     expect(estadoCategoria({ activa: false, estado: 'abierta' }, 'damas')).toBe(null);
   });
 });
+
+describe('categoriasDeBloque', () => {
+  it('lista las categorías del bloque, primero las que siguen en curso', async () => {
+    const { categoriasDeBloque } = await import('./ranking');
+    const etapa = { id: 'final', activa: true, estado: 'abierta', categoriasCerradas: ['damas'] };
+    const todas = [...competidores, { id: 'x1', dorsal: '20', nombre: 'Eva', categoria: 'Abierta', categoriaId: 'abierta' }];
+    const turnos = [
+      { etapaId: 'final', categoriaId: 'damas', boulderId: 'B1' },
+      { etapaId: 'final', categoriaId: 'abierta', boulderId: 'B1' },
+      { etapaId: 'final', categoriaId: 'varones', boulderId: 'B2' },
+      { etapaId: 'qualis', categoriaId: 'varones', boulderId: 'B1' },
+    ];
+    expect(categoriasDeBloque(etapa, turnos, todas, 'B1')).toEqual([
+      { categoriaId: 'abierta', categoria: 'Abierta', finalizada: false },
+      { categoriaId: 'damas', categoria: 'Damas', finalizada: true },
+    ]);
+  });
+});
