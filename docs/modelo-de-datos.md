@@ -23,10 +23,12 @@ erDiagram
     COMPETIDOR o|--o{ APELACION : "competidorId opcional"
 
     COMPETENCIA {
-        string id PK "competencias/{id}"
+        string id PK "competencias/{id}: su dirección, copa-chile-2026"
         string nombre
         string fecha
-        boolean activa "una sola activa"
+        string club "organizador"
+        string lugar
+        boolean activa "publicada en la portada"
         timestamp creadaEn
     }
 
@@ -49,7 +51,7 @@ erDiagram
 
     MIEMBRO {
         string id PK "competencias/{id}/miembros/{correo}"
-        string rol "juez | juez_jefe | delegado"
+        string rol "organizador | juez | juez_jefe | delegado"
         string nombre
         string club "delegados"
         map asignaciones "etapaId a lista de bloques (jueces)"
@@ -118,11 +120,16 @@ erDiagram
     }
 ```
 
+## Competencias
+
+El id de cada competencia es su dirección (`/copa-chile-2026`), así que se elige al crearla y no cambia. Pueden correr varias competencias al mismo tiempo; `activa` solo indica si aparece en la portada. Dentro de cada competencia, una etapa está activa.
+
 ## Roles
 
 | Rol | Dónde | Qué puede hacer |
 | --- | --- | --- |
-| Admin | `admins/{correo}` | Configurar cualquier competencia: etapas, competidoras, turnos y miembros. Se crea a mano en la consola. |
+| Admin | `admins/{correo}` | La plataforma: crear competencias, publicarlas en la portada y configurar cualquiera. Se crea a mano en la consola. |
+| Organizador | `miembros/{correo}` con `rol: organizador` | Configurar solo su competencia: datos, etapas, competidoras, turnos y miembros. No la publica en la portada. |
 | Juez | `miembros/{correo}` con `rol: juez` | Anotar en los bloques que tiene asignados en cada etapa. Leer apelaciones. |
 | Juez jefe | `miembros/{correo}` con `rol: juez_jefe` | Anotar en todos los bloques y resolver apelaciones. |
 | Delegado | `miembros/{correo}` con `rol: delegado` | Presentar apelaciones y ver solo las suyas. |
@@ -184,7 +191,7 @@ Los bloques no tienen colección. Son la lista `boulders` de la etapa. Cada cate
 El archivo es `firestore.rules` y los tests están en `tests/rules/`.
 
 - El público lee competencias, etapas, competidoras, turnos y resultados.
-- Solo un admin escribe la configuración de una competencia.
+- Solo un admin crea competencias y las publica en la portada. Un admin o un organizador de la competencia escribe su configuración y sus miembros.
 - Un juez escribe resultados solo en sus bloques asignados, con un marcador válido, en una etapa abierta y en una categoría no finalizada. El juez jefe, en cualquier bloque.
 - En una ronda americana, además: no más intentos que `maxIntentos`, y el encadenado tiene que ser el último intento.
 - Los resultados no se borran, ni siquiera el admin. El historial es solo-agregar y lo leen los jueces de la competencia.

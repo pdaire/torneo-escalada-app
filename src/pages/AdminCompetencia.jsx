@@ -1,18 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { arrayRemove, arrayUnion, deleteDoc, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { BOULDERS, COMPETIDORES } from '../data/ordenAbsolutaDamas';
-import { cargarDemo } from '../data/cargarDemo';
-import { DEMO_DELEGADO, DEMO_JUEZ, demoPrincipal } from '../data/demo';
-import { demoPrimavera } from '../data/demoPrimavera';
-
-const DEMOS = [
-  { crear: demoPrincipal, boton: 'Demo completa (3 rondas)' },
-  { crear: demoPrimavera, boton: 'Demo Primavera - El Muro' },
-];
-import { useEsAdmin, useUsuario } from '../hooks/useSesion';
+import { useEsAdmin, useMiembro, useUsuario } from '../hooks/useSesion';
 import { resultadosColRef } from '../utils/resultado';
 import { ordenDeSalida, rankingPorCategoria } from '../utils/ranking';
 import { AMERICANA_POR_DEFECTO, FORMATOS, esAmericana, puntosAmericana, reglasAmericana } from '../utils/score';
@@ -21,39 +12,38 @@ import { generarTablaPuntos, parsearTablaPuntos, tablaACsv } from '../utils/tabl
 import './admin.css';
 import {
   competenciaRef,
-  competenciasCol,
   competidoresCol,
   docsConId,
   etapasCol,
   miembroRef,
   miembrosCol,
   normalizarCorreo,
+  rutas,
   slug,
   sumarMinutos,
   turnosCol,
 } from '../utils/competicion';
 
-const INICIOS_EJEMPLO = {
-  M1: '15:15',
-  M2: '15:31',
-  M3: '15:47',
-  M4: '16:03',
-};
-
 const ROLES = {
+  organizador: 'Organizador',
   juez: 'Juez',
   juez_jefe: 'Juez jefe',
   delegado: 'Delegado',
 };
 
-export default function AdminView() {
+// Administración de una competencia (/:competenciaId/admin): etapas, competidoras,
+// orden de paso, jueces y delegados. Pueden entrar los admins de la plataforma y
+// los organizadores de esta competencia.
+export default function AdminCompetencia() {
+  const { competenciaId } = useParams();
   const { user, correo, cargando: cargandoSesion } = useUsuario();
   const { esAdmin, cargando: cargandoAdmin } = useEsAdmin(user);
+  const { miembro, cargando: cargandoMiembro } = useMiembro(user, competenciaId);
+  const autorizado = esAdmin || miembro?.rol === 'organizador';
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
-  const [competencias, setCompetencias] = useState([]);
-  const [competenciaId, setCompetenciaId] = useState('');
+  const [competencia, setCompetencia] = useState(null);
   const [etapas, setEtapas] = useState([]);
   const [competidores, setCompetidores] = useState([]);
   const [turnos, setTurnos] = useState([]);
@@ -61,7 +51,6 @@ export default function AdminView() {
   const [etapaOrdenId, setEtapaOrdenId] = useState('');
   const [origenOrden, setOrigenOrden] = useState('categoria');
   const [asignacion, setAsignacion] = useState({ correo: '', etapaId: '' });
-  const [progresoDemo, setProgresoDemo] = useState('');
   const [formatoNueva, setFormatoNueva] = useState('wc');
   const [origenTabla, setOrigenTabla] = useState('formula');
   const [tablaAbierta, setTablaAbierta] = useState(null);
@@ -72,16 +61,10 @@ export default function AdminView() {
   }, []);
 
   useEffect(() => {
-    if (!esAdmin) return undefined;
-    return onSnapshot(competenciasCol(db), (snapshot) => {
-      const lista = docsConId(snapshot).sort((a, b) => a.nombre.localeCompare(b.nombre));
-      setCompetencias(lista);
-      setCompetenciaId((actual) => actual || lista.find((item) => item.activa)?.id || lista[0]?.id || '');
+    if (!autorizado) return undefined;
+    const unsubCompetencia = onSnapshot(competenciaRef(db, competenciaId), (snap) => {
+      setCompetencia(snap.exists() ? { id: snap.id, ...snap.data() } : null);
     });
-  }, [esAdmin]);
-
-  useEffect(() => {
-    if (!esAdmin || !competenciaId) return undefined;
     const unsubEtapas = onSnapshot(etapasCol(db, competenciaId), (snapshot) => setEtapas(docsConId(snapshot)));
     const unsubCompetidores = onSnapshot(competidoresCol(db, competenciaId), (snapshot) => {
       setCompetidores(docsConId(snapshot).sort((a, b) => Number(a.dorsal) - Number(b.dorsal)));
@@ -91,12 +74,13 @@ export default function AdminView() {
       setMiembros(docsConId(snapshot).sort((a, b) => a.id.localeCompare(b.id)));
     });
     return () => {
+      unsubCompetencia();
       unsubEtapas();
       unsubCompetidores();
       unsubTurnos();
       unsubMiembros();
     };
-  }, [esAdmin, competenciaId]);
+  }, [autorizado, competenciaId]);
 
   const ejecutar = async (accion) => {
     try {
@@ -104,32 +88,10 @@ export default function AdminView() {
       setError('');
     } catch (err) {
       setError(err.code === 'permission-denied'
-        ? 'Firestore rechazó la escritura. Revisa que tu cuenta sea administradora y que las reglas estén publicadas.'
+        ? 'Firestore rechazó la escritura. Revisa que tu cuenta administre esta competencia y que las reglas estén publicadas.'
         : err.message);
     }
   };
-
-  const crearCompetencia = (evento) => {
-    evento.preventDefault();
-    const datos = new FormData(evento.currentTarget);
-    const nombre = String(datos.get('nombre')).trim();
-    const id = `${slug(nombre)}-${Date.now().toString(36)}`;
-    ejecutar(async () => {
-      await setDoc(competenciaRef(db, id), {
-        nombre,
-        fecha: datos.get('fecha'),
-        activa: competencias.length === 0,
-        creadaEn: serverTimestamp(),
-      });
-      setCompetenciaId(id);
-    });
-  };
-
-  const activarCompetencia = (id) => ejecutar(async () => {
-    const batch = writeBatch(db);
-    competencias.forEach((item) => batch.update(competenciaRef(db, item.id), { activa: item.id === id }));
-    await batch.commit();
-  });
 
   const crearEtapa = (evento) => {
     evento.preventDefault();
@@ -256,22 +218,6 @@ export default function AdminView() {
     ejecutar(() => updateDoc(doc(etapasCol(db, competenciaId), etapa.id), {
       categoriasCerradas: cerrar ? arrayUnion(categoriaId) : arrayRemove(categoriaId),
     }));
-  };
-
-  const cargarCompetenciaDemo = (crear) => {
-    const demo = crear();
-    const pregunta = `¿Cargar "${demo.nombre}" y dejarla activa? El tablero público pasará a mostrarla. `
-      + `Si ya existe, se reinicia: se pierden los resultados anotados en ella.`;
-    if (!window.confirm(pregunta)) return;
-    setProgresoDemo('Empezando…');
-    ejecutar(async () => {
-      try {
-        await cargarDemo(db, correo, competencias, setProgresoDemo, demo);
-      } catch (err) {
-        throw new Error(`La demo quedó a medias (${err.code || err.message}). Vuelve a cargarla para completarla.`);
-      }
-      setCompetenciaId(demo.id);
-    }).finally(() => setProgresoDemo(''));
   };
 
   const agregarCompetidor = (evento) => {
@@ -435,57 +381,14 @@ export default function AdminView() {
     }));
   };
 
-  const importarEjemplo = () => ejecutar(async () => {
-    const id = 'baguales-2026';
-    const batch = writeBatch(db);
-    batch.set(competenciaRef(db, id), {
-      nombre: 'Baguales 2026',
-      fecha: '2026-10-04',
-      activa: true,
-      creadaEn: serverTimestamp(),
-    });
-    competencias.filter((item) => item.id !== id).forEach((item) => batch.update(competenciaRef(db, item.id), { activa: false }));
-    batch.set(doc(etapasCol(db, id), 'final'), {
-      nombre: 'Final',
-      tipo: 'final',
-      boulders: BOULDERS,
-      duracionTurno: 4,
-      activa: true,
-      estado: 'abierta',
-      etapaPreviaId: null,
-    });
-    COMPETIDORES.forEach((competidor) => {
-      batch.set(doc(competidoresCol(db, id), competidor.id), {
-        dorsal: competidor.dorsal,
-        nombre: competidor.nombre,
-        categoria: competidor.categoria,
-        categoriaId: competidor.categoriaId,
-      });
-    });
-    BOULDERS.forEach((boulderId) => {
-      COMPETIDORES.forEach((competidor, index) => {
-        batch.set(doc(turnosCol(db, id), `${boulderId}-${competidor.id}`), {
-          etapaId: 'final',
-          categoriaId: competidor.categoriaId,
-          boulderId,
-          competidorId: competidor.id,
-          orden: index + 1,
-          horaProgramada: sumarMinutos(INICIOS_EJEMPLO[boulderId], index * 4),
-        });
-      });
-    });
-    await batch.commit();
-    setCompetenciaId(id);
-  });
-
-  if (cargandoSesion || (user && cargandoAdmin)) {
+  if (cargandoSesion || (user && (cargandoAdmin || cargandoMiembro))) {
     return <main className="admin"><p>Cargando…</p></main>;
   }
 
   if (!user) {
     return (
       <main className="admin">
-        <h1>Administrar competencia</h1>
+        <h1>Administrar /{competenciaId}</h1>
         <form className="admin-login" onSubmit={(evento) => {
           evento.preventDefault();
           signInWithEmailAndPassword(auth, email, pin).catch(() => setError('Credenciales incorrectas.'));
@@ -499,13 +402,13 @@ export default function AdminView() {
     );
   }
 
-  if (!esAdmin) {
+  if (!autorizado) {
     return (
       <main className="admin">
-        <h1>Sin acceso de administración</h1>
-        <p>{correo} no está en la lista de administradores.</p>
+        <h1>Sin acceso a /{competenciaId}</h1>
+        <p>{correo} no es organizador de esta competencia.</p>
         <div className="admin-row">
-          <Link className="admin-link" to="/juez">Ir a la vista del juez</Link>
+          <Link className="admin-link" to={rutas.juez(competenciaId)}>Ir a la vista del juez</Link>
           <button onClick={() => signOut(auth)} className="admin-btn-secondary">Salir</button>
         </div>
       </main>
@@ -522,51 +425,34 @@ export default function AdminView() {
     .slice()
     .sort((a, b) => a.orden - b.orden || a.boulderId.localeCompare(b.boulderId));
 
+  const enlaces = [
+    ['Tablero público', rutas.tablero(competenciaId)],
+    ['Tablet del juez', rutas.juez(competenciaId)],
+    ['Delegados', rutas.delegado(competenciaId)],
+  ];
+
   return (
     <main className="admin">
       <div className="admin-header">
-        <h1>Administrar</h1>
+        <h1>{competencia?.nombre || competenciaId}</h1>
         <div className="admin-header-actions">
-          <Link className="admin-link" to="/juez">Vista del juez</Link>
+          {esAdmin && <Link className="admin-link" to="/admin">Todas las competencias</Link>}
           <button onClick={() => signOut(auth)} className="admin-btn-secondary">Salir</button>
         </div>
       </div>
       {error && <p className="admin-error">{error}</p>}
 
       <section className="admin-section">
-        <h2>Competencia</h2>
-        <div className="admin-row">
-          {progresoDemo
-            ? <button disabled className="admin-btn">{progresoDemo}</button>
-            : DEMOS.map((item) => (
-              <button key={item.boton} onClick={() => cargarCompetenciaDemo(item.crear)} className="admin-btn">{item.boton}</button>
-            ))}
-          {progresoDemo && <strong>No cierres ni recargues esta pestaña hasta que termine.</strong>}
-          {import.meta.env.DEV && (
-            <button onClick={importarEjemplo} className="admin-btn-secondary">Cargar ejemplo Baguales 2026</button>
-          )}
-        </div>
-        <p className="admin-meta">
-          Cargar una demo la reinicia y la deja activa. <strong>Completa:</strong> seis categorías, clasificatoria en ronda americana,
-          semifinal y final con Mujeres Adultas en curso. <strong>Primavera - El Muro:</strong> una categoría General, 20 competidores,
-          ronda americana en curso. Juez: {DEMO_JUEZ}. Delegado: {DEMO_DELEGADO}. Tu cuenta queda como juez jefe.
-        </p>
-        <form onSubmit={crearCompetencia} className="admin-row">
-          <input name="nombre" placeholder="Nombre" required />
-          <input name="fecha" type="date" required />
-          <button className="admin-btn">Crear</button>
-        </form>
-        {competencias.map((item) => (
-          <div key={item.id} className="admin-row">
-            <button
-              onClick={() => setCompetenciaId(item.id)}
-              className={item.id === competenciaId ? 'admin-btn-secondary is-selected' : 'admin-btn-secondary'}
-            >
-              {item.nombre} {item.activa ? '· activa' : ''}
-            </button>
-            {!item.activa && <button onClick={() => activarCompetencia(item.id)} className="admin-btn-secondary">Activar</button>}
+        <h2>Direcciones para compartir</h2>
+        {enlaces.map(([texto, ruta]) => (
+          <div key={ruta} className="admin-row">
+            <span className="admin-list-item">{texto}: <code>{window.location.origin}{ruta}</code></span>
+            <Link className="admin-link" to={ruta}>Abrir</Link>
           </div>
         ))}
+        <p className="admin-meta">
+          {competencia?.activa ? 'Aparece en la portada.' : 'No aparece en la portada (la publica el administrador de la plataforma), pero las direcciones funcionan igual.'}
+        </p>
       </section>
 
       {competenciaId && (

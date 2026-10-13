@@ -11,6 +11,10 @@
     ],
     "rewrites": [
       {
+        "source": "/*/juez.webmanifest",
+        "destination": "/juez.webmanifest"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -44,7 +48,16 @@
         ]
       },
       {
-        "source": "/@(index.html|sw-juez.js|juez.webmanifest)",
+        "source": "/@(index.html|sw-juez.js)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "**/juez.webmanifest",
         "headers": [
           {
             "key": "Cache-Control",

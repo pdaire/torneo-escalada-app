@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { esAmericana, formatearPuntaje, puntosDeBloque, reglasAmericana } from '../utils/score';
-import { useEtapaActiva } from '../hooks/useEtapaActiva';
+import { useCompetencia } from '../hooks/useCompetencia';
+import { rutas } from '../utils/competicion';
+import NoExiste from '../components/NoExiste';
 import { useRankingEtapa } from '../hooks/useResultados';
-import { bloquesDeCategoria, cambiosEntre, estadoCategoria, firmasDeRanking, ordenarEtapas } from '../utils/ranking';
+import { bloquesDeCategoria, estadoCategoria, firmasDeRanking, ordenarEtapas } from '../utils/ranking';
+import { useDestellos } from '../hooks/useDestellos';
 import { EstadoCategoria, MarcaBoulder } from '../components/Marcador';
 import './publico.css';
 
@@ -12,45 +15,6 @@ function bloquesVisibles(grupo, etapa, turnos) {
   const propios = bloquesDeCategoria(etapa, turnos, grupo.categoriaId);
   const conResultado = new Set(grupo.filas.flatMap((fila) => Object.keys(fila.boulders)));
   return [...propios, ...[...conResultado].filter((id) => !propios.includes(id))];
-}
-
-const DURACION_DESTELLO = 3000;
-
-// Marca por unos segundos las celdas y filas que cambiaron desde el último snapshot,
-// para que el público note un resultado nuevo. Al cargar la página o cambiar de
-// etapa no marca nada. Devuelve clave → momento del cambio (sirve como `key` para
-// reiniciar la animación si la misma celda vuelve a cambiar).
-function useDestellos(grupos, contexto, listo) {
-  const anterior = useRef(null);
-  const temporizadores = useRef([]);
-  const [destellos, setDestellos] = useState(() => new Map());
-
-  useEffect(() => () => temporizadores.current.forEach(clearTimeout), []);
-
-  useEffect(() => {
-    if (!listo) return;
-    const firmas = firmasDeRanking(grupos);
-    const previo = anterior.current;
-    anterior.current = { contexto, firmas };
-    if (!previo || previo.contexto !== contexto) return;
-    const cambiadas = cambiosEntre(previo.firmas, firmas);
-    if (!cambiadas.length) return;
-    const momento = Date.now();
-    setDestellos((actual) => {
-      const siguiente = new Map(actual);
-      cambiadas.forEach((clave) => siguiente.set(clave, momento));
-      return siguiente;
-    });
-    temporizadores.current.push(setTimeout(() => {
-      setDestellos((actual) => {
-        const siguiente = new Map(actual);
-        cambiadas.forEach((clave) => { if (siguiente.get(clave) === momento) siguiente.delete(clave); });
-        return siguiente;
-      });
-    }, DURACION_DESTELLO));
-  }, [grupos, contexto, listo]);
-
-  return destellos;
 }
 
 function FiltroCategorias({ grupos, seleccionada, onElegir }) {
@@ -95,8 +59,6 @@ function PestanasEtapas({ etapas, seleccionada, onElegir }) {
   );
 }
 
-// Ronda americana: en vez de una columna por bloque (pueden ser 30 o más),
-// los bloques que suman, la cantidad de tops y el total.
 function BloquesQueSuman({ comp, etapa, destellos }) {
   if (!comp.cuentan.length) return <span className="dorsal">–</span>;
   return comp.cuentan.map((boulderId) => (
@@ -106,12 +68,12 @@ function BloquesQueSuman({ comp, etapa, destellos }) {
   ));
 }
 
-function FilasAmericana({ grupo, etapa, destellos }) {
+function FilasAmericana({ grupo, etapa, destellos, competenciaId }) {
   return grupo.filas.map((comp) => (
     <tr key={comp.id} className={destellos.has(comp.id) ? 'fila-destello' : undefined}>
       <td className={comp.posicion === 1 && comp.puntaje > 0 ? 'pos oro' : 'pos'}>{comp.posicion}°</td>
       <td className="nombre">
-        <Link to={`/competidor/${comp.id}`}>
+        <Link to={rutas.competidor(competenciaId, comp.id)}>
           {comp.dorsal && <span className="dorsal">#{comp.dorsal} </span>}
           {comp.nombre}
         </Link>
@@ -121,7 +83,9 @@ function FilasAmericana({ grupo, etapa, destellos }) {
       <td className="bloques-suman">
         <BloquesQueSuman comp={comp} etapa={etapa} destellos={destellos} />
       </td>
-      <td>{comp.tops}</td>
+      <td>
+        <span key={destellos.get(comp.id) || 'quieto'} className={destellos.has(comp.id) ? 'puntaje-destello' : undefined}>{comp.tops}</span>
+      </td>
       <td className="puntaje">
         <span key={destellos.get(comp.id) || 'quieto'} className={destellos.has(comp.id) ? 'puntaje-destello' : undefined}>
           {formatearPuntaje(etapa, comp.puntaje)}
@@ -131,7 +95,7 @@ function FilasAmericana({ grupo, etapa, destellos }) {
   ));
 }
 
-function TablaCategoria({ grupo, etapa, turnos, conTitulo, destellos }) {
+function TablaCategoria({ grupo, etapa, turnos, conTitulo, destellos, competenciaId }) {
   const americana = esAmericana(etapa);
   const bloques = americana ? [] : bloquesVisibles(grupo, etapa, turnos);
   return (
@@ -155,12 +119,12 @@ function TablaCategoria({ grupo, etapa, turnos, conTitulo, destellos }) {
             </tr>
           </thead>
           <tbody>
-            {americana && <FilasAmericana grupo={grupo} etapa={etapa} destellos={destellos} />}
+            {americana && <FilasAmericana grupo={grupo} etapa={etapa} destellos={destellos} competenciaId={competenciaId} />}
             {!americana && grupo.filas.map((comp) => (
               <tr key={comp.id} className={destellos.has(comp.id) ? 'fila-destello' : undefined}>
                 <td className={comp.posicion === 1 && comp.puntaje > 0 ? 'pos oro' : 'pos'}>{comp.posicion}°</td>
                 <td className="nombre">
-                  <Link to={`/competidor/${comp.id}`}>
+                  <Link to={rutas.competidor(competenciaId, comp.id)}>
                     {comp.dorsal && <span className="dorsal">#{comp.dorsal} </span>}
                     {comp.nombre}
                   </Link>
@@ -190,11 +154,13 @@ function TablaCategoria({ grupo, etapa, turnos, conTitulo, destellos }) {
 }
 
 export default function PublicDashboard() {
-  const { competencia, etapa: etapaActiva, etapas, competidores, turnos, cargando } = useEtapaActiva();
+  const { competenciaId } = useParams();
+  const { competencia, etapa: etapaActiva, etapas, competidores, turnos, cargando, noExiste } = useCompetencia(competenciaId);
   const [parametros, setParametros] = useSearchParams();
   const etapa = etapas.find((item) => item.id === parametros.get('etapa')) || etapaActiva;
   const { grupos, error: errorCarga, cargando: cargandoResultados } = useRankingEtapa({ competencia, etapa, etapas, competidores, turnos });
-  const destellos = useDestellos(grupos, `${competencia?.id}/${etapa?.id}`, !cargando && !cargandoResultados);
+  const firmas = useMemo(() => firmasDeRanking(grupos), [grupos]);
+  const destellos = useDestellos(firmas, `${competencia?.id}/${etapa?.id}`, !cargando && !cargandoResultados);
 
   useEffect(() => {
     document.body.classList.add('public-board');
@@ -222,8 +188,11 @@ export default function PublicDashboard() {
   const enVivo = etapa?.activa && etapa?.estado !== 'cerrada';
   const encabezado = enVivo ? 'En vivo' : etapa?.estado === 'cerrada' ? 'Resultados finales' : '';
 
+  if (noExiste) return <NoExiste competenciaId={competenciaId} />;
+
   return (
     <div className="publico">
+      <nav className="publico-volver"><Link to="/">← Competencias</Link></nav>
       <header className="publico-encabezado">
         {encabezado && <p className={enVivo ? 'publico-kicker en-vivo' : 'publico-kicker'}>{encabezado}</p>}
         <h1 className="publico-titulo">{cargando ? 'Cargando…' : `Resultados${etapa ? ` ${etapa.nombre}` : ''}`}</h1>
@@ -240,7 +209,7 @@ export default function PublicDashboard() {
       )}
 
       {!cargandoResultados && ordenados.map((grupo) => (
-        <TablaCategoria key={grupo.categoriaId} grupo={grupo} etapa={etapa} turnos={turnos} conTitulo={grupos.length > 1} destellos={destellos} />
+        <TablaCategoria key={grupo.categoriaId} grupo={grupo} etapa={etapa} turnos={turnos} conTitulo={grupos.length > 1} destellos={destellos} competenciaId={competenciaId} />
       ))}
     </div>
   );

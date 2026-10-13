@@ -1,14 +1,16 @@
-// Service worker de la tablet del juez (alcance /juez).
+// Service worker de la tablet del juez. Se registra una vez por competencia,
+// con alcance /{competencia}/juez; cada registro usa su propia caché.
 // Permite abrir la tablet sin red. No toca Firestore ni Firebase Auth: esas
 // conexiones van a otros dominios y pasan directo a la red.
 //
-// - Página (/juez): primero la red; sin red, la última versión guardada.
+// - Página (/{competencia}/juez): primero la red; sin red, la última versión guardada.
 //   Así, con conexión siempre se carga la versión publicada más nueva.
 // - /assets/*: nombres con hash que nunca cambian, se sirven desde la caché.
 // - Íconos y manifiesto: desde la caché, actualizándose en segundo plano.
 
-const CACHE = 'juez-v1';
-const PAGINA = '/juez';
+const PAGINA = new URL(self.registration.scope).pathname.replace(/\/$/, '');
+const VERSION = 'juez-v2';
+const CACHE = `${VERSION}:${PAGINA}`;
 
 async function guardarPagina(respuesta) {
   const cache = await caches.open(CACHE);
@@ -29,7 +31,11 @@ self.addEventListener('install', (evento) => {
 
 self.addEventListener('activate', (evento) => {
   evento.waitUntil(caches.keys()
-    .then((nombres) => Promise.all(nombres.filter((n) => n !== CACHE).map((n) => caches.delete(n))))
+    // Solo las cachés de esta competencia en otras versiones (y la de la versión
+    // anterior, sin competencia): las cachés son compartidas entre registros.
+    .then((nombres) => Promise.all(nombres
+      .filter((n) => n === 'juez-v1' || (n.endsWith(`:${PAGINA}`) && n !== CACHE))
+      .map((n) => caches.delete(n))))
     .then(() => self.clients.claim()));
 });
 
@@ -56,7 +62,7 @@ self.addEventListener('fetch', (evento) => {
     return;
   }
 
-  if (/^\/(juez[-.]|favicon)/.test(url.pathname)) {
+  if (/^\/(juez[-.]|favicon)/.test(url.pathname) || url.pathname.endsWith('/juez.webmanifest')) {
     evento.respondWith(caches.open(CACHE).then(async (cache) => {
       const guardada = await cache.match(request);
       const red = fetch(request).then((respuesta) => {

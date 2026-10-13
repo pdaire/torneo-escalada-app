@@ -435,3 +435,52 @@
     padding: 0.6rem 0.4rem;
   }
 }
+
+/* Portada y enlace de vuelta */
+.publico-volver {
+  max-width: 1100px;
+  margin: 0 auto 0.5rem;
+  font-size: 0.95rem;
+}
+
+.publico-volver a {
+  color: #aaa;
+}
+
+.portada {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.portada-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.portada-tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 1.25rem;
+  border-radius: 12px;
+  background-color: #1e1e1e;
+  text-decoration: none;
+  border: 1px solid #2d2d2d;
+}
+
+.portada-tarjeta:hover {
+  border-color: #555;
+}
+
+.portada-tarjeta strong {
+  font-size: 1.4rem;
+}
+
+.portada-tarjeta span {
+  color: #ccc;
+}
+
+.portada-tarjeta small {
+  color: #777;
+}

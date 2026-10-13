@@ -215,3 +215,22 @@ describe('ranking de ronda americana', () => {
     expect(damas.filas.find((f) => f.id === 'd3')).toMatchObject({ posicion: 3, puntaje: 0, tops: 0 });
   });
 });
+
+describe('destellos de la ronda americana y de la ficha', () => {
+  it('un top que no entra en los 5 mejores cambia los tops de la fila', async () => {
+    const { cambiosEntre, firmasDeRanking } = await import('./ranking');
+    const antes = firmasDeRanking([{ filas: [{ id: 'a', puntaje: 200, tops: 6, boulders: {} }] }]);
+    const despues = firmasDeRanking([{ filas: [{ id: 'a', puntaje: 200, tops: 7, boulders: { B1: { zonaEnIntento: 1, topEnIntento: 1 } } }] }]);
+    expect(cambiosEntre(antes, despues).sort()).toEqual(['a', 'a/B1']);
+  });
+
+  it('la ficha detecta un intento nuevo y el cambio de puntaje de la etapa', async () => {
+    const { cambiosEntre, firmasDeFicha } = await import('./ranking');
+    const ficha = (intentos, puntaje) => firmasDeFicha([{
+      etapa: { id: 'final' }, posicion: 2, puntaje, tops: 0,
+      bloques: [{ boulderId: 'W1', intentos, zonaEnIntento: null, topEnIntento: null, cuenta: false }],
+    }]);
+    expect(cambiosEntre(ficha(1, 0), ficha(2, 0))).toEqual(['final/W1']);
+    expect(cambiosEntre(ficha(2, 0), ficha(2, 99)).sort()).toEqual(['final']);
+  });
+});

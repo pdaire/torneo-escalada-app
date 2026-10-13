@@ -40,6 +40,11 @@ service cloud.firestore {
       return esMiembro(c) && rol(c) == 'delegado';
     }
 
+    // Administra una competencia: un admin de la plataforma o un organizador de esa competencia.
+    function puedeAdministrar(c) {
+      return esAdmin() || (esMiembro(c) && rol(c) == 'organizador');
+    }
+
     function rutaEtapa(c, e) {
       return /databases/$(database)/documents/competencias/$(c)/etapas/$(e);
     }
@@ -116,7 +121,7 @@ service cloud.firestore {
 
       // Registro solo-agregar de cada cambio. Se escribe en el mismo batch que el resultado.
       match /historial/{entradaId} {
-        allow read: if esAdmin() || esJuez(resultadoId.split('__')[0]);
+        allow read: if puedeAdministrar(resultadoId.split('__')[0]) || esJuez(resultadoId.split('__')[0]);
 
         allow create: if esJuez(resultadoId.split('__')[0])
           && request.resource.data.keys().hasOnly(['version', 'accion', 'intentos', 'zonaEnIntento', 'topEnIntento', 'autor', 'en'])
@@ -143,38 +148,43 @@ service cloud.firestore {
 
     // ---- Competencias ----
 
+    // El id de la competencia es su dirección: /copa-chile.
     match /competencias/{c} {
       allow read: if true;
-      allow write: if esAdmin();
+      allow create, delete: if esAdmin();
+      // El organizador edita los datos de su competencia, pero solo el admin la publica en la portada.
+      allow update: if esAdmin()
+        || (puedeAdministrar(c) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activa']));
 
       match /etapas/{etapaId} {
         allow read: if true;
-        allow write: if esAdmin()
+        allow write: if puedeAdministrar(c)
           && request.resource.data.get('estado', 'abierta') in ['abierta', 'cerrada']
           && request.resource.data.get('categoriasCerradas', []) is list
           && request.resource.data.get('formato', 'wc') in ['wc', 'americana'];
-        allow delete: if esAdmin();
+        allow delete: if puedeAdministrar(c);
       }
 
       match /competidores/{competidorId} {
         allow read: if true;
-        allow write: if esAdmin();
+        allow write: if puedeAdministrar(c);
       }
 
       match /turnos/{turnoId} {
         allow read: if true;
-        allow write: if esAdmin();
+        allow write: if puedeAdministrar(c);
       }
 
       // Id = correo en minúsculas. El mismo correo puede tener otro rol en otra competencia.
+      // Roles: organizador (administra la competencia), juez, juez_jefe, delegado.
       match /miembros/{miembroId} {
-        allow read: if esAdmin() || (autenticado() && miembroId == correo());
-        allow create, update: if esAdmin()
+        allow read: if puedeAdministrar(c) || (autenticado() && miembroId == correo());
+        allow create, update: if puedeAdministrar(c)
           && miembroId == miembroId.lower()
           && request.resource.data.keys().hasOnly(['rol', 'nombre', 'club', 'asignaciones'])
-          && request.resource.data.rol in ['juez', 'juez_jefe', 'delegado']
+          && request.resource.data.rol in ['organizador', 'juez', 'juez_jefe', 'delegado']
           && request.resource.data.get('asignaciones', {}) is map;
-        allow delete: if esAdmin();
+        allow delete: if puedeAdministrar(c);
       }
 
       match /apelaciones/{apelacionId} {
@@ -192,7 +202,7 @@ service cloud.firestore {
         }
 
         allow read: if autenticado()
-          && (resource.data.autorUid == request.auth.uid || esJuez(c) || esAdmin());
+          && (resource.data.autorUid == request.auth.uid || esJuez(c) || puedeAdministrar(c));
 
         allow create: if esDelegado(c)
           && apelacionValida(request.resource.data)

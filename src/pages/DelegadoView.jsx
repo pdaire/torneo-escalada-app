@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { addDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { useEtapaActiva } from '../hooks/useEtapaActiva';
+import { useCompetencia } from '../hooks/useCompetencia';
+import { rutas } from '../utils/competicion';
+import NoExiste from '../components/NoExiste';
 import { useResultadosEtapa } from '../hooks/useResultados';
 import { useMiembro, useUsuario } from '../hooks/useSesion';
 import { apelacionesCol } from '../utils/competicion';
@@ -39,7 +41,8 @@ export default function DelegadoView() {
   const [editandoId, setEditandoId] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [apelaciones, setApelaciones] = useState([]);
-  const { competencia, etapa, competidores, turnos, cargando } = useEtapaActiva();
+  const { competenciaId } = useParams();
+  const { competencia, etapa, competidores, turnos, cargando, noExiste } = useCompetencia(competenciaId);
   const { miembro, cargando: cargandoMiembro } = useMiembro(user, competencia?.id);
   const { resultados } = useResultadosEtapa(competencia?.id, etapa?.id);
   const esDelegado = miembro?.rol === 'delegado';
@@ -176,6 +179,8 @@ export default function DelegadoView() {
     setError('');
   };
 
+  if (noExiste) return <NoExiste competenciaId={competenciaId} />;
+
   if (cargandoSesion) {
     return <main className="delegado delegado-login"><p>Cargando…</p></main>;
   }
@@ -216,10 +221,10 @@ export default function DelegadoView() {
         <div>
           <p className="delegado-kicker">Delegado{miembro.club ? ` · ${miembro.club}` : ''}</p>
           <h1>Presentar apelación</h1>
-          <p>{competencia?.nombre || (cargando ? 'Cargando…' : 'Sin competencia activa')} · {etapa?.nombre || 'Sin etapa activa'}</p>
+          <p>{competencia?.nombre || 'Cargando…'} · {etapa?.nombre || 'Sin etapa activa'}</p>
         </div>
         <div className="delegado-actions">
-          <Link to="/">Tablero</Link>
+          <Link to={rutas.tablero(competenciaId)}>Tablero</Link>
           <button className="delegado-btn-secondary" onClick={() => signOut(auth)}>Salir</button>
         </div>
       </header>

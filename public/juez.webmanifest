@@ -1,18 +1,33 @@
 {
   "name": "Juez · Torneo de escalada",
   "short_name": "Juez",
-  "description": "Tablet del juez para anotar intentos, zona y top.",
+  "description": "Tablet del juez de la competencia: anotar intentos, zona y top.",
   "lang": "es",
-  "id": "/juez",
-  "start_url": "/juez",
-  "scope": "/juez",
+  "id": "./juez",
+  "start_url": "./juez",
+  "scope": "./juez",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#111111",
   "icons": [
-    { "src": "/juez-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/juez-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/juez-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/juez-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/juez-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/juez-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

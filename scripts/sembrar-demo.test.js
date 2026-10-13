@@ -27,8 +27,8 @@ it('carga la competencia demo', async () => {
   await Promise.all([ADMIN, DEMO_JUEZ, DEMO_DELEGADO].map(crearCuenta));
   await setDoc(doc(sinReglas(), `admins/${ADMIN}`), {});
   // Primero la chica; la principal queda como competencia activa.
-  await cargarDemo(usuario(ADMIN), ADMIN, [], () => {}, demoPrimavera());
-  await cargarDemo(usuario(ADMIN), ADMIN, [{ id: 'primavera-el-muro', activa: true }]);
+  await cargarDemo(usuario(ADMIN), ADMIN, () => {}, demoPrimavera());
+  await cargarDemo(usuario(ADMIN), ADMIN);
   await cerrar();
   console.log(`\nCuentas demo (clave ${CLAVE}): ${ADMIN} (admin y juez jefe), ${DEMO_JUEZ}, ${DEMO_DELEGADO}\n`);
 }, 60000);

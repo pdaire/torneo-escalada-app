@@ -51,6 +51,29 @@ describe('configuración', () => {
     await denegado(setDoc(doc(usuario('admin@club.cl'), `competencias/${C}/miembros/x@club.cl`), { rol: 'rey' }));
   });
 
+  it('el organizador administra solo su competencia y no la publica en la portada', async () => {
+    const db = sinReglas();
+    await setDoc(doc(db, `competencias/${C}/miembros/org@club.cl`), { rol: 'organizador' });
+    await setDoc(doc(db, 'competencias/ajena'), { nombre: 'Ajena', activa: true });
+    const org = usuario('org@club.cl');
+    await permitido(setDoc(doc(org, `competencias/${C}/competidores/nueva`), { dorsal: '9', nombre: 'Nueva', categoria: 'Damas', categoriaId: 'damas' }));
+    await permitido(updateDoc(doc(org, `competencias/${C}/etapas/final`), { estado: 'cerrada' }));
+    await permitido(setDoc(doc(org, `competencias/${C}/miembros/otrojuez@club.cl`), { rol: 'juez', asignaciones: {} }));
+    await permitido(getDocs(collection(org, `competencias/${C}/miembros`)));
+    await permitido(updateDoc(doc(org, `competencias/${C}`), { nombre: 'Copa renombrada' }));
+    await denegado(updateDoc(doc(org, `competencias/${C}`), { activa: false }));
+    await denegado(setDoc(doc(org, 'competencias/nueva-copa'), { nombre: 'Nueva' }));
+    await denegado(setDoc(doc(org, 'competencias/ajena/competidores/x'), { nombre: 'x' }));
+    await denegado(getDocs(collection(org, 'competencias/ajena/miembros')));
+    // No es juez: no anota resultados.
+    await denegado(guardarResultado(org, clave, marcador(1), 'intento', 'org@club.cl'));
+  });
+
+  it('un juez no administra ni se cambia el rol', async () => {
+    await denegado(setDoc(doc(usuario('juez@club.cl'), `competencias/${C}/miembros/juez@club.cl`), { rol: 'organizador' }));
+    await denegado(getDocs(collection(usuario('juez@club.cl'), `competencias/${C}/miembros`)));
+  });
+
   it('nadie escribe admins ni las colecciones viejas', async () => {
     await denegado(setDoc(doc(usuario('admin@club.cl'), 'admins/otro@club.cl'), {}));
     await denegado(setDoc(doc(usuario('juez@club.cl'), 'intentos/x'), { a: 1 }));

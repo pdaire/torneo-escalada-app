@@ -197,12 +197,12 @@ export function categoriasDeBloque(etapa, turnos, competidores, boulderId) {
     .sort((a, b) => Number(a.finalizada) - Number(b.finalizada) || a.categoria.localeCompare(b.categoria));
 }
 
-// Firma de lo que muestra el tablero: el puntaje de cada fila (`id`) y la zona y el top
-// de cada celda (`id/bloque`). Un intento sin zona ni top no cambia nada visible.
+// Firma de lo que muestra el tablero: el puntaje y los tops de cada fila (`id`) y la
+// zona y el top de cada celda (`id/bloque`). Un intento sin zona ni top no cambia nada visible.
 export function firmasDeRanking(grupos) {
   const firmas = new Map();
   grupos.forEach((grupo) => grupo.filas.forEach((fila) => {
-    firmas.set(fila.id, String(fila.puntaje));
+    firmas.set(fila.id, `${fila.puntaje}|${fila.tops}`);
     Object.entries(fila.boulders).forEach(([boulderId, marca]) => {
       if (marca.zonaEnIntento == null && marca.topEnIntento == null) return;
       firmas.set(`${fila.id}/${boulderId}`, `${marca.zonaEnIntento}|${marca.topEnIntento}`);
@@ -215,4 +215,17 @@ export function firmasDeRanking(grupos) {
 export function cambiosEntre(antes, despues) {
   const claves = new Set([...antes.keys(), ...despues.keys()]);
   return [...claves].filter((clave) => antes.get(clave) !== despues.get(clave));
+}
+
+// Firma de lo que muestra la ficha de una competidora: posición y puntaje de cada
+// etapa (`etapaId`) y cada bloque con sus intentos (`etapaId/bloque`).
+export function firmasDeFicha(detalle) {
+  const firmas = new Map();
+  detalle.forEach((item) => {
+    firmas.set(item.etapa.id, `${item.posicion}|${item.puntaje}|${item.tops}`);
+    item.bloques.forEach((bloque) => {
+      firmas.set(`${item.etapa.id}/${bloque.boulderId}`, `${bloque.intentos}|${bloque.zonaEnIntento}|${bloque.topEnIntento}|${bloque.cuenta}`);
+    });
+  });
+  return firmas;
 }

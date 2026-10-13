@@ -14,4 +14,6 @@ npm test             # puntaje, validación y ranking
 npm run test:rules   # reglas de Firestore en el emulador (necesita Java)
 ```
 
+Cada competencia vive en su dirección: `/copa-chile`, `/copa-chile/juez`, `/copa-chile/delegado`, `/copa-chile/admin`. La portada `/` lista las competencias publicadas y `/admin` administra la plataforma.
+
 La documentación está en [docs/](docs/README.md): modelo de datos, pantallas, puntuación y despliegue.

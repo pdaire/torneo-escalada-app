@@ -59,3 +59,28 @@ export function sumarMinutos(hora, minutos) {
 export function docsConId(snapshot) {
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
+
+// Palabras que no pueden ser el nombre de una competencia en la URL:
+// son rutas de la app o archivos publicados.
+const RESERVADAS = new Set(['admin', 'juez', 'delegado', 'competidor', 'assets', 'index.html', 'sw-juez.js', 'favicon.svg', 'icons.svg']);
+
+// El id de una competencia es su nombre en la URL: /copa-chile/juez.
+// Valida el slug elegido al crear la competencia; devuelve '' si sirve.
+export function validarSlug(valor, existentes = []) {
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(valor)) {
+    return 'Usa solo minúsculas, números y guiones, sin guion al inicio ni al final. Ejemplo: copa-chile-2026.';
+  }
+  if (valor.length < 3 || valor.length > 60) return 'El nombre en la URL tiene que tener entre 3 y 60 caracteres.';
+  if (RESERVADAS.has(valor) || valor.startsWith('juez')) return `"${valor}" está reservado por la app. Elige otro.`;
+  if (existentes.includes(valor)) return `Ya existe una competencia con la dirección /${valor}.`;
+  return '';
+}
+
+// Rutas de una competencia.
+export const rutas = {
+  tablero: (c, parametros) => `/${c}${parametros ? `?${new URLSearchParams(parametros)}` : ''}`,
+  competidor: (c, id) => `/${c}/competidor/${id}`,
+  juez: (c) => `/${c}/juez`,
+  delegado: (c) => `/${c}/delegado`,
+  admin: (c) => `/${c}/admin`,
+};

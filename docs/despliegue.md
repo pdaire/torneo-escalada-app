@@ -25,7 +25,7 @@ Usa el mismo prefijo para `firebase init` y `firebase deploy`.
 
 ## Hosting
 
-`firebase.json` publica la carpeta `dist` de Vite y reescribe todas las rutas a `index.html`, para que `/juez` y `/admin` funcionen al recargar.
+`firebase.json` publica la carpeta `dist` de Vite y reescribe todas las rutas a `index.html`, para que `/copa-chile/juez` o `/admin` funcionen al recargar. Además, `/{competencia}/juez.webmanifest` se sirve desde el mismo `juez.webmanifest`, para que cada competencia se instale como su propia app.
 
 Caché del navegador:
 
@@ -37,13 +37,13 @@ Caché del navegador:
 ### App instalable del juez (PWA)
 
 - `public/juez.webmanifest`: nombre, íconos (`public/juez-*.png`, fuente en `juez-icono.svg`), pantalla completa, inicio en `/juez`.
-- `public/sw-juez.js`: service worker con alcance `/juez`. La página va primero a la red y, sin red, usa la última versión guardada; los archivos de `/assets` se sirven desde la caché y los de versiones anteriores se borran. No intercepta Firestore ni Firebase Auth.
-- `src/pwaJuez.js`: agrega el manifiesto y las etiquetas de iOS solo en `/juez`, y registra el service worker solo en el build de producción.
+- `public/sw-juez.js`: service worker que se registra una vez por competencia, con alcance `/{competencia}/juez` y su propia caché. La página va primero a la red y, sin red, usa la última versión guardada; los archivos de `/assets` se sirven desde la caché y los de versiones anteriores se borran. No intercepta Firestore ni Firebase Auth.
+- `src/pwaJuez.js`: en `/{competencia}/juez` agrega las etiquetas de iOS y, en el build de producción, el manifiesto y el service worker. También quita la instalación de la versión anterior en `/juez`.
 
 Para probarlo como en producción (headers incluidos), compilar y servir con el emulador de Hosting:
 
 ```bash
-npm run build && firebase emulators:start --only hosting --project demo-torneo   # http://127.0.0.1:5002/juez
+npm run build && firebase emulators:start --only hosting --project demo-torneo   # http://127.0.0.1:5002/copa-chile/juez
 ```
 
 Al fusionar en `main`, GitHub Actions corre `npm ci && npm test && npm run build` y publica el canal en vivo: https://torneo-escalada-app.web.app/
@@ -62,7 +62,16 @@ Una sola vez, en la consola de Firebase:
 
 1. **Authentication → Settings → User actions:** desactivar *Enable create (sign-up)*. Si queda activo, cualquiera puede crear una cuenta con la API key pública. Las cuentas se crean en *Authentication → Users*.
 2. **Firestore:** crear la colección `admins` y, dentro, un documento por administrador cuyo ID sea su correo en minúsculas. Si la consola pide un campo, cualquiera sirve (por ejemplo `nombre`); la app solo revisa que el documento exista. La contraseña no va aquí: se define al crear el usuario en *Authentication → Users*.
-3. En `/admin`, agregar a cada juez, juez jefe y delegado en **Jueces y delegados** de cada competencia, y asignar bloques a los jueces.
+3. En `/admin`, crear cada competencia con su dirección. En `/{competencia}/admin`, agregar organizadores, jueces, juez jefe y delegados, y asignar bloques a los jueces.
+
+## Una competencia nueva para un club
+
+1. En *Authentication → Users*, crear la cuenta del organizador del club (correo y clave).
+2. En `/admin` → **Nueva competencia**: nombre, dirección, fecha, club, lugar y el correo del organizador.
+3. Enviarle al organizador `https://torneo-escalada-app.web.app/{competencia}/admin`. Desde ahí arma etapas y competidores, y agrega a sus jueces y delegados (sus cuentas también se crean en *Authentication → Users*).
+4. Cuando esté lista, **Publicar en la portada**.
+
+Las competencias creadas antes de este cambio conservan su id como dirección (por ejemplo `/baguales-2026`).
 
 Las asignaciones viejas (`asignaciones` dentro de la etapa) ya no se usan. Hay que volver a cargarlas como miembros.
 

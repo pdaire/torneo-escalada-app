@@ -24,10 +24,11 @@ async function resultadosDemo() {
 
 describe('competencia demo', () => {
   it('el admin la carga a través de las reglas y queda activa', async () => {
-    await permitido(cargarDemo(usuario(ADMIN), ADMIN, [{ id: 'otra', activa: true }]));
+    await permitido(cargarDemo(usuario(ADMIN), ADMIN));
     const publico = anonimo();
     expect((await getDoc(doc(publico, `competencias/${DEMO_ID}`))).data().activa).toBe(true);
-    expect((await getDoc(doc(publico, 'competencias/otra'))).data().activa).toBe(false);
+    // Varias competencias pueden estar en la portada a la vez.
+    expect((await getDoc(doc(publico, 'competencias/otra'))).data().activa).toBe(true);
     const final = (await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/final`))).data();
     expect(final.categoriasCerradas).toHaveLength(5);
     expect((await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/clasificatoria`))).data().estado).toBe('cerrada');
@@ -38,7 +39,7 @@ describe('competencia demo', () => {
   });
 
   it('el juez demo anota en Mujeres Adultas pero no en una categoría finalizada', async () => {
-    await cargarDemo(usuario(ADMIN), ADMIN, []);
+    await cargarDemo(usuario(ADMIN), ADMIN);
     const juez = usuario('pdaire+juez1@gmail.com');
     // La última en salir de Mujeres Adultas todavía no tiene resultados en la final.
     const pendientes = generarDemo().turnos.filter((t) => t.etapaId === 'final' && t.categoriaId === 'mujeres-adultas' && t.orden === 6);
@@ -50,7 +51,7 @@ describe('competencia demo', () => {
   });
 
   it('ronda americana: el juez demo anota en sus sectores (A y B) y no en los demás', async () => {
-    await cargarDemo(usuario(ADMIN), ADMIN, []);
+    await cargarDemo(usuario(ADMIN), ADMIN);
     // Para demostrar la cartilla: se reabre la clasificatoria.
     await setDoc(doc(sinReglas(), `competencias/${DEMO_ID}/etapas/clasificatoria`), { estado: 'abierta' }, { merge: true });
     const juez = usuario('pdaire+juez1@gmail.com');
@@ -64,17 +65,17 @@ describe('competencia demo', () => {
   });
 
   it('se puede recargar: reinicia lo anotado durante la demo', async () => {
-    await cargarDemo(usuario(ADMIN), ADMIN, []);
+    await cargarDemo(usuario(ADMIN), ADMIN);
     const pendiente = generarDemo().turnos.find((t) => t.etapaId === 'final' && t.categoriaId === 'mujeres-adultas' && t.orden === 6);
     const clave = { competenciaId: DEMO_ID, etapaId: 'final', competidorId: pendiente.competidorId, boulderId: 'W1' };
     await guardarResultado(usuario(ADMIN), clave, { intentos: 1, zonaEnIntento: 1, topEnIntento: 1, version: 1 }, 'top', ADMIN);
-    await permitido(cargarDemo(usuario(ADMIN), ADMIN, []));
+    await permitido(cargarDemo(usuario(ADMIN), ADMIN));
     const anotado = (await resultadosDemo()).find((r) => r.competidorId === pendiente.competidorId && r.boulderId === 'W1' && r.etapaId === 'final');
     expect(anotado).toMatchObject({ intentos: 0, topEnIntento: null, version: 2 });
   });
 
   it('una carga cortada a medias se completa al volver a cargar', async () => {
-    await cargarDemo(usuario(ADMIN), ADMIN, []);
+    await cargarDemo(usuario(ADMIN), ADMIN);
     // Simula una carga que se cortó antes de terminar: faltan resultados de la final
     // y las etapas quedaron abiertas.
     const db = sinReglas();
@@ -86,7 +87,7 @@ describe('competencia demo', () => {
       await setDoc(doc(db, `competencias/${DEMO_ID}/etapas/${etapa}`), { estado: 'abierta', categoriasCerradas: [] }, { merge: true });
     }
 
-    await permitido(cargarDemo(usuario(ADMIN), ADMIN, []));
+    await permitido(cargarDemo(usuario(ADMIN), ADMIN));
     expect(await resultadosDemo()).toHaveLength(generarDemo().resultados.length);
     const publico = anonimo();
     expect((await getDoc(doc(publico, `competencias/${DEMO_ID}/etapas/semifinal`))).data().estado).toBe('cerrada');
@@ -95,7 +96,7 @@ describe('competencia demo', () => {
 
   it('Primavera - El Muro: se carga activa y el juez anota en sus sectores', async () => {
     const demo = demoPrimavera();
-    await permitido(cargarDemo(usuario(ADMIN), ADMIN, [{ id: 'otra', activa: true }], () => {}, demo));
+    await permitido(cargarDemo(usuario(ADMIN), ADMIN, () => {}, demo));
     const publico = anonimo();
     expect((await getDoc(doc(publico, 'competencias/primavera-el-muro'))).data()).toMatchObject({ nombre: 'Primavera - El Muro', activa: true });
     expect((await getDoc(doc(publico, 'competencias/primavera-el-muro/etapas/ronda-americana'))).data()).toMatchObject({ activa: true, estado: 'abierta' });
@@ -110,6 +111,6 @@ describe('competencia demo', () => {
   });
 
   it('alguien que no es admin no puede cargarla', async () => {
-    await denegado(cargarDemo(usuario('pdaire+juez1@gmail.com'), 'pdaire+juez1@gmail.com', []));
+    await denegado(cargarDemo(usuario('pdaire+juez1@gmail.com'), 'pdaire+juez1@gmail.com'));
   });
 });

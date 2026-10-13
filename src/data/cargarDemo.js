@@ -3,11 +3,11 @@ import { competenciaRef, competidoresCol, etapasCol, miembroRef, turnosCol } fro
 import { agregarResultado, idResultado, resultadosColRef } from '../utils/resultado';
 import { DEMO_DELEGADO, DEMO_JUEZ, demoPrincipal } from './demo';
 
-// Carga o reinicia una competencia demo (la principal por defecto) y la deja activa.
+// Carga o reinicia una competencia demo (la principal por defecto) y la publica en la portada.
 // Escribe con la sesión del admin, que queda como juez jefe de la demo: así los
 // resultados pasan por las mismas reglas que en una competencia real.
 // Si se corta a medias, volver a cargarla la completa: parte de las versiones vigentes.
-export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () => {}, demo = demoPrincipal()) {
+export async function cargarDemo(db, correoAdmin, onProgreso = () => {}, demo = demoPrincipal()) {
   const { competidores, turnos, resultados, etapasCerradas, categoriasCerradas } = demo;
   const C = demo.id;
 
@@ -15,9 +15,6 @@ export async function cargarDemo(db, correoAdmin, competencias, onProgreso = () 
   onProgreso('Configurando la competencia…');
   const config = writeBatch(db);
   config.set(competenciaRef(db, C), { nombre: demo.nombre, fecha: new Date().toISOString().slice(0, 10), activa: true });
-  competencias
-    .filter((item) => item.id !== C && item.activa)
-    .forEach((item) => config.update(competenciaRef(db, item.id), { activa: false }));
   demo.etapas.forEach((etapa) => {
     config.set(doc(etapasCol(db, C), etapa.id), {
       ...etapa,

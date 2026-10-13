@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   guardarResultado,
   idResultado,
@@ -16,7 +16,9 @@ import { apelacionesCol } from '../utils/competicion';
 import { categoriasDeBloque } from '../utils/ranking';
 import { esAmericana } from '../utils/score';
 import JuezAmericana from './JuezAmericana';
-import { useEtapaActiva } from '../hooks/useEtapaActiva';
+import { useCompetencia } from '../hooks/useCompetencia';
+import { rutas } from '../utils/competicion';
+import NoExiste from '../components/NoExiste';
 import { useMiembro, useUsuario } from '../hooks/useSesion';
 
 function leerPreferencia(clave, valorInicial) {
@@ -60,7 +62,8 @@ export default function JuezView() {
   const [pin, setPin] = useState('');
   const [errorLogin, setErrorLogin] = useState('');
 
-  const { competencia, etapa, competidores, turnos: turnosCrudos, cargando, error: errorConfig } = useEtapaActiva();
+  const { competenciaId } = useParams();
+  const { competencia, etapa, competidores, turnos: turnosCrudos, cargando, error: errorConfig, noExiste } = useCompetencia(competenciaId);
   const { miembro, cargando: cargandoMiembro } = useMiembro(user, competencia?.id);
   const [boulderId, setBoulderId] = useState('');
   const [categoriaPedida, setCategoriaPedida] = useState('');
@@ -303,6 +306,8 @@ export default function JuezView() {
     );
   }
 
+  if (noExiste) return <NoExiste competenciaId={competenciaId} />;
+
   if (cargando || (competencia && cargandoMiembro)) {
     return <main style={pantallaSimple}>Cargando competencia...</main>;
   }
@@ -312,7 +317,7 @@ export default function JuezView() {
       <main style={pantallaSimple}>
         <h2>No hay una etapa activa</h2>
         <p>Carga la competencia, las competidoras y el orden de paso antes de puntuar.</p>
-        <Link to="/admin">Ir a administrar</Link>
+        <Link to={rutas.admin(competenciaId)}>Ir a administrar</Link>
         {errorConfig && <p>{errorConfig}</p>}
       </main>
     );
@@ -358,7 +363,7 @@ export default function JuezView() {
               <button onClick={() => setRevisandoApelaciones((abierta) => !abierta)} style={{ padding: '0.9rem', backgroundColor: '#fff', color: '#111', border: '1px solid #111', borderRadius: '8px' }}>
                 {revisandoApelaciones ? 'Ocultar apelaciones' : 'Apelaciones'}
               </button>
-              <Link to="/admin">Administrar</Link>
+              <Link to={rutas.admin(competenciaId)}>Administrar</Link>
             </div>
           </div>
         )}
@@ -546,7 +551,7 @@ export default function JuezView() {
         <button onClick={() => setRevisandoApelaciones((abierta) => !abierta)} style={{ padding: '1rem', backgroundColor: revisandoApelaciones ? '#111' : '#fff', color: revisandoApelaciones ? '#fff' : '#111', border: '1px solid #111', borderRadius: '8px' }}>
           {revisandoApelaciones ? 'Volver a puntuar' : 'Apelaciones'}
         </button>
-        <Link to="/admin" style={{ alignSelf: 'center' }}>Administrar</Link>
+        <Link to={rutas.admin(competenciaId)} style={{ alignSelf: 'center' }}>Administrar</Link>
       </div>
     </div>
   );
