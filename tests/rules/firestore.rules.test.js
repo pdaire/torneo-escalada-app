@@ -74,6 +74,18 @@ describe('configuración', () => {
     await denegado(getDocs(collection(usuario('juez@club.cl'), `competencias/${C}/miembros`)));
   });
 
+  it('el super admin crea una competencia con sus etapas y su organizador en un batch', async () => {
+    const { plantilla } = await import('../../src/data/plantillas');
+    const db = usuarioGoogle('admin@club.cl');
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'competencias/copa-nueva'), { nombre: 'Copa nueva', fecha: '2026-11-15', club: 'Club', lugar: '', activa: false, creadaEn: serverTimestamp() });
+    plantilla('americana-final').etapas().forEach(({ id, ...etapa }) => batch.set(doc(db, `competencias/copa-nueva/etapas/${id}`), etapa));
+    batch.set(doc(db, 'competencias/copa-nueva/miembros/org@club.cl'), { rol: 'organizador', nombre: '', club: 'Club', asignaciones: {} });
+    await permitido(batch.commit());
+    // El organizador ya puede administrarla.
+    await permitido(setDoc(doc(usuario('org@club.cl'), 'competencias/copa-nueva/competidores/general-1'), { dorsal: '1', nombre: 'Ana', categoria: 'General', categoriaId: 'general' }));
+  });
+
   it('el super admin tiene que entrar con Google: con correo y clave no es admin', async () => {
     await permitido(setDoc(doc(usuarioGoogle('admin@club.cl'), 'competencias/nueva-copa'), { nombre: 'Nueva', activa: false }));
     await denegado(setDoc(doc(usuario('admin@club.cl'), 'competencias/otra-copa'), { nombre: 'Otra', activa: false }));

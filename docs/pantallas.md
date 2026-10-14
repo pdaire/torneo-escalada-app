@@ -123,8 +123,14 @@ Solo `/…/juez` se instala. La portada, el tablero, la ficha, `/admin` y `/dele
 
 Solo para el super admin: una cuenta que está en `admins` y entra con **Google**. Con correo y clave no se puede administrar la plataforma, aunque el correo sea el mismo. Los organizadores, jueces y delegados siguen entrando con correo y clave. En la demo local, `/admin` muestra también el formulario de clave.
 
-- **Nueva competencia:** nombre, dirección (se sugiere desde el nombre: "Copa Chile 2026" → `copa-chile-2026`), fecha, club organizador, lugar y, opcional, el correo del organizador. La dirección no se puede cambiar después: es el id de la competencia. Se crea oculta de la portada.
-- **Todas las competencias:** enlaces para administrar cada una y ver su tablero, y **Publicar en la portada** / **Quitar de la portada**. Pueden estar varias publicadas a la vez.
+- **Nueva competencia:**
+  - **Nombre:** mientras se escribe aparece la dirección completa ("Copa Chile 2026" → `…/copa-chile-2026`) y si está disponible. Se puede cambiar con **cambiar dirección**, pero no después de crearla: es el id de la competencia.
+  - **Fecha, club organizador y lugar.**
+  - **Formato:** una plantilla con las etapas ya armadas. **Vacía**; **Ronda americana** (24 bloques en 4 sectores, tabla clásica, suman 5); o **Clasificatoria americana + final World Climbing**. Todo se ajusta después en el admin de la competencia.
+  - **Organizador** (opcional): su correo. Su cuenta se crea aparte en *Authentication → Users*.
+
+  Se crea oculta de la portada. Después aparece una tarjeta con las direcciones para copiar (admin del club, jueces, delegados, tablero), **Copiar mensaje para el organizador** (un texto con sus direcciones y los primeros pasos, para WhatsApp o correo), **Abrir su admin** y **Publicar en la portada**.
+- **Competencias:** una tarjeta por competencia con su estado (**En portada**, **Oculta** o **Pasada**), fecha, club, lugar y dirección, y los enlaces a su admin y su tablero. Pueden estar varias publicadas a la vez.
 - **Demos** (ver abajo). En desarrollo (`npm run dev`) también se puede cargar el ejemplo Baguales 2026.
 
 ## Administración de una competencia `/:competencia/admin`

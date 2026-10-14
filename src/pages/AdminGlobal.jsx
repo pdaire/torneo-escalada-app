@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
-import { doc, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { doc, onSnapshot, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { cargarDemo } from '../data/cargarDemo';
 import { DEMO_DELEGADO, DEMO_JUEZ, demoPrincipal } from '../data/demo';
 import { demoPrimavera } from '../data/demoPrimavera';
+import { PLANTILLAS, mensajeParaOrganizador, plantilla } from '../data/plantillas';
 import { BOULDERS, COMPETIDORES } from '../data/ordenAbsolutaDamas';
 import { useEsAdmin, useUsuario } from '../hooks/useSesion';
 import {
@@ -59,6 +60,12 @@ export default function AdminGlobal() {
   const [competencias, setCompetencias] = useState([]);
   const [nombre, setNombre] = useState('');
   const [slugElegido, setSlugElegido] = useState('');
+  const [editandoSlug, setEditandoSlug] = useState(false);
+  const [plantillaId, setPlantillaId] = useState('americana');
+  const [creada, setCreada] = useState(null);
+  const [copiado, setCopiado] = useState('');
+  // Fecha local de hoy (AAAA-MM-DD), para marcar las competencias que ya pasaron.
+  const [hoy] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [progresoDemo, setProgresoDemo] = useState('');
 
   useEffect(() => {
@@ -102,39 +109,65 @@ export default function AdminGlobal() {
 
   const slugSugerido = nombre.trim() ? slug(nombre) : '';
   const slugFinal = slugElegido || slugSugerido;
+  const errorSlug = slugFinal ? validarSlug(slugFinal, competencias.map((item) => item.id)) : '';
+  const origen = window.location.origin;
 
   const crearCompetencia = (evento) => {
     evento.preventDefault();
     const formulario = evento.currentTarget;
     const datos = new FormData(formulario);
-    const errorSlug = validarSlug(slugFinal, competencias.map((item) => item.id));
-    if (errorSlug) {
-      setError(errorSlug);
+    if (errorSlug || !slugFinal) {
+      setError(errorSlug || 'Escribe el nombre de la competencia.');
       return;
     }
     const organizador = normalizarCorreo(datos.get('organizador'));
+    const club = String(datos.get('club') || '').trim();
+    const competencia = {
+      nombre: nombre.trim(),
+      fecha: datos.get('fecha'),
+      club,
+      lugar: String(datos.get('lugar') || '').trim(),
+      activa: false,
+    };
+    const etapas = plantilla(plantillaId).etapas();
     ejecutar(async () => {
+      // Competencia, etapas de la plantilla y organizador en un solo batch.
       const batch = writeBatch(db);
-      batch.set(competenciaRef(db, slugFinal), {
-        nombre: nombre.trim(),
-        fecha: datos.get('fecha'),
-        club: String(datos.get('club') || '').trim(),
-        lugar: String(datos.get('lugar') || '').trim(),
-        activa: false,
-        creadaEn: serverTimestamp(),
-      });
+      batch.set(competenciaRef(db, slugFinal), { ...competencia, creadaEn: serverTimestamp() });
+      etapas.forEach(({ id, ...etapa }) => batch.set(doc(etapasCol(db, slugFinal), id), etapa));
       if (organizador) {
-        batch.set(miembroRef(db, slugFinal, organizador), { rol: 'organizador', nombre: '', club: String(datos.get('club') || '').trim(), asignaciones: {} });
+        batch.set(miembroRef(db, slugFinal, organizador), { rol: 'organizador', nombre: '', club, asignaciones: {} });
       }
       await batch.commit();
-      setMensaje(`Competencia creada en /${slugFinal}. Queda oculta de la portada hasta que la publiques.`);
+      setCreada({ id: slugFinal, ...competencia, organizador, etapas: etapas.length });
+      setMensaje('');
       formulario.reset();
       setNombre('');
       setSlugElegido('');
+      setEditandoSlug(false);
     });
   };
 
-  const cambiarPortada = (competencia) => ejecutar(() => updateDoc(competenciaRef(db, competencia.id), { activa: !competencia.activa }));
+  const copiar = async (texto, clave) => {
+    try {
+      await navigator.clipboard.writeText(texto);
+    } catch {
+      // Sin permiso para el portapapeles: copia con una selección temporal.
+      const area = document.createElement('textarea');
+      area.value = texto;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+    }
+    setCopiado(clave);
+    setTimeout(() => setCopiado((actual) => (actual === clave ? '' : actual)), 2000);
+  };
+
+  const cambiarPortada = (competencia) => ejecutar(async () => {
+    await updateDoc(competenciaRef(db, competencia.id), { activa: !competencia.activa });
+    if (creada?.id === competencia.id) setCreada((actual) => ({ ...actual, activa: !competencia.activa }));
+  });
 
   const cargarCompetenciaDemo = (crear) => {
     const demo = crear();
@@ -244,49 +277,129 @@ export default function AdminGlobal() {
       {error && <p className="admin-error">{error}</p>}
       {mensaje && <p className="admin-meta"><strong>{mensaje}</strong></p>}
 
+      {creada && (
+        <section className="admin-section admin-exito">
+          <div className="admin-row" style={{ justifyContent: 'space-between' }}>
+            <h2>✓ {creada.nombre} creada</h2>
+            <button onClick={() => setCreada(null)} className="admin-btn-secondary">Cerrar</button>
+          </div>
+          <p className="admin-meta">
+            {creada.etapas ? `Con ${creada.etapas} ${creada.etapas === 1 ? 'etapa' : 'etapas'} de la plantilla. ` : 'Sin etapas: se arman en su admin. '}
+            {creada.organizador
+              ? `Organizador: ${creada.organizador}. Si todavía no tiene cuenta, créala en Firebase → Authentication → Users con ese correo.`
+              : 'Sin organizador: puedes agregarlo después en su admin, en Jueces y delegados.'}
+          </p>
+          {[
+            ['Admin del club', `${origen}${rutas.admin(creada.id)}`],
+            ['Jueces', `${origen}${rutas.juez(creada.id)}`],
+            ['Delegados', `${origen}${rutas.delegado(creada.id)}`],
+            ['Tablero público', `${origen}${rutas.tablero(creada.id)}`],
+          ].map(([texto, url]) => (
+            <div key={url} className="admin-row admin-enlace">
+              <span className="admin-enlace-nombre">{texto}</span>
+              <code>{url}</code>
+              <button onClick={() => copiar(url, url)} className="admin-btn-secondary">{copiado === url ? 'Copiado' : 'Copiar'}</button>
+            </div>
+          ))}
+          <div className="admin-row">
+            <button
+              onClick={() => copiar(mensajeParaOrganizador({ origen, competencia: creada, correoOrganizador: creada.organizador }), 'mensaje')}
+              className="admin-btn">
+              {copiado === 'mensaje' ? 'Mensaje copiado' : 'Copiar mensaje para el organizador'}
+            </button>
+            <Link className="admin-link" to={rutas.admin(creada.id)}>Abrir su admin</Link>
+            <button onClick={() => cambiarPortada(creada)} className="admin-btn-secondary">
+              {creada.activa ? 'Quitar de la portada' : 'Publicar en la portada'}
+            </button>
+          </div>
+        </section>
+      )}
+
       <section className="admin-section">
         <h2>Nueva competencia</h2>
         <form onSubmit={crearCompetencia} className="admin-stack">
+          <label className="admin-campo">
+            Nombre
+            <input value={nombre} onChange={(evento) => setNombre(evento.target.value)} placeholder="Copa Chile 2026" required />
+          </label>
+          {slugFinal && (
+            <div className="admin-direccion">
+              {editandoSlug ? (
+                <label className="admin-row">
+                  <span className="admin-meta">{origen}/</span>
+                  <input
+                    value={slugFinal}
+                    onChange={(evento) => setSlugElegido(evento.target.value.toLowerCase().replace(/\s+/g, '-'))}
+                    aria-label="Dirección de la competencia"
+                    autoFocus
+                  />
+                </label>
+              ) : (
+                <span className="admin-meta">{origen}/<strong>{slugFinal}</strong></span>
+              )}
+              <span className={errorSlug ? 'admin-estado-error' : 'admin-estado-ok'}>{errorSlug || '✓ disponible'}</span>
+              {!editandoSlug && <button type="button" onClick={() => setEditandoSlug(true)} className="admin-boton-texto">cambiar dirección</button>}
+              <span className="admin-meta">La dirección no se puede cambiar después de crear la competencia.</span>
+            </div>
+          )}
           <div className="admin-row">
-            <label>Nombre <input value={nombre} onChange={(evento) => setNombre(evento.target.value)} placeholder="Copa Chile 2026" required /></label>
-            <label>
-              Dirección
-              <span className="admin-meta"> /</span>
-              <input value={slugFinal} onChange={(evento) => setSlugElegido(evento.target.value.toLowerCase().replace(/\s+/g, '-'))} placeholder="copa-chile-2026" required />
-            </label>
-            <label>Fecha <input name="fecha" type="date" required /></label>
+            <label className="admin-campo">Fecha <input name="fecha" type="date" required /></label>
+            <label className="admin-campo">Club organizador <input name="club" placeholder="Club Vertical" /></label>
+            <label className="admin-campo">Lugar <input name="lugar" placeholder="Gimnasio, ciudad" /></label>
           </div>
+
+          <fieldset className="admin-plantillas">
+            <legend>Formato</legend>
+            {PLANTILLAS.map((item) => (
+              <label key={item.id} className={item.id === plantillaId ? 'admin-plantilla elegida' : 'admin-plantilla'}>
+                <input type="radio" name="plantilla" checked={item.id === plantillaId} onChange={() => setPlantillaId(item.id)} />
+                <span>
+                  <strong>{item.nombre}</strong>
+                  <span className="admin-meta">{item.descripcion}</span>
+                </span>
+              </label>
+            ))}
+            <span className="admin-meta">Todo se puede ajustar después en el admin de la competencia.</span>
+          </fieldset>
+
+          <label className="admin-campo">
+            Organizador (opcional)
+            <input name="organizador" type="email" placeholder="organizador@club.cl" />
+            <span className="admin-meta">
+              Administrará solo esta competencia. Su cuenta (correo y clave) se crea aparte en Firebase → Authentication → Users.
+            </span>
+          </label>
           <div className="admin-row">
-            <label>Club organizador <input name="club" placeholder="Club de escalada" /></label>
-            <label>Lugar <input name="lugar" placeholder="Gimnasio, ciudad" /></label>
-            <label>Correo del organizador <input name="organizador" type="email" placeholder="opcional" /></label>
-            <button className="admin-btn">Crear</button>
+            <button className="admin-btn" disabled={!slugFinal || Boolean(errorSlug)}>Crear competencia</button>
           </div>
-          <p className="admin-meta">
-            La dirección no se puede cambiar después: es la URL de la competencia (/{slugFinal || 'copa-chile-2026'}, /{slugFinal || 'copa-chile-2026'}/juez…).
-            El organizador administra solo esta competencia en /{slugFinal || 'copa-chile-2026'}/admin; su cuenta se crea en Firebase Authentication.
-          </p>
         </form>
       </section>
 
       <section className="admin-section">
-        <h2>Todas las competencias</h2>
+        <h2>Competencias</h2>
         {competencias.length === 0 && <p className="admin-meta">Todavía no hay competencias.</p>}
-        {competencias.map((item) => (
-          <div key={item.id} className="admin-row">
-            <span className="admin-list-item">
-              <strong>{item.nombre}</strong> · /{item.id}
-              {item.fecha ? ` · ${item.fecha}` : ''}
-              {item.club ? ` · ${item.club}` : ''}
-              {item.activa ? ' · en portada' : ' · oculta'}
-            </span>
-            <Link className="admin-link" to={rutas.admin(item.id)}>Administrar</Link>
-            <Link className="admin-link" to={rutas.tablero(item.id)}>Tablero</Link>
-            <button onClick={() => cambiarPortada(item)} className="admin-btn-secondary">
-              {item.activa ? 'Quitar de la portada' : 'Publicar en la portada'}
-            </button>
-          </div>
-        ))}
+        {competencias.map((item) => {
+          const estado = item.activa ? 'portada' : (item.fecha && item.fecha < hoy ? 'pasada' : 'oculta');
+          const etiqueta = { portada: '● En portada', oculta: '○ Oculta', pasada: '○ Pasada' }[estado];
+          return (
+            <div key={item.id} className="admin-tarjeta">
+              <div>
+                <span className={`admin-estado admin-estado-${estado}`}>{etiqueta}</span>
+                <strong>{item.nombre}</strong>
+                <span className="admin-meta">
+                  {[item.fecha, item.club, item.lugar].filter(Boolean).join(' · ')} · /{item.id}
+                </span>
+              </div>
+              <div className="admin-row">
+                <Link className="admin-link" to={rutas.admin(item.id)}>Admin</Link>
+                <Link className="admin-link" to={rutas.tablero(item.id)}>Tablero</Link>
+                <button onClick={() => cambiarPortada(item)} className="admin-btn-secondary">
+                  {item.activa ? 'Quitar de la portada' : 'Publicar en la portada'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </section>
 
       <section className="admin-section">

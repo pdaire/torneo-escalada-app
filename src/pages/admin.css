@@ -176,3 +176,143 @@ body.admin-mode #root {
 .admin-list-item {
   color: #1a1d23;
 }
+
+/* Administración de la plataforma: crear competencia y lista */
+.admin-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+
+.admin-campo .admin-meta {
+  font-weight: normal;
+}
+
+.admin-direccion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  align-items: center;
+  margin-top: -0.25rem;
+}
+
+.admin-estado-ok {
+  color: #1e7b34;
+  font-weight: 650;
+}
+
+.admin-estado-error {
+  color: #8a1c13;
+  font-weight: 650;
+}
+
+.admin-boton-texto {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #1d4e89;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.admin-plantillas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.admin-plantillas legend {
+  margin-bottom: 0.3rem;
+  font-weight: 600;
+}
+
+.admin-plantilla {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #d5d9e0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.admin-plantilla.elegida {
+  border-color: #1d4e89;
+  background: #eef4fb;
+}
+
+.admin-plantilla > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.admin-exito {
+  border-color: #9fd3ad;
+  background: #f1faf3;
+}
+
+.admin-enlace {
+  flex-wrap: nowrap;
+}
+
+.admin-enlace-nombre {
+  min-width: 8rem;
+  font-weight: 600;
+}
+
+.admin-enlace code {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-tarjeta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #d5d9e0;
+  border-radius: 10px;
+}
+
+.admin-tarjeta > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.admin-estado {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-estado-portada {
+  color: #1e7b34;
+}
+
+.admin-estado-oculta,
+.admin-estado-pasada {
+  color: #5e6772;
+}
+
+@media (max-width: 640px) {
+  .admin-enlace {
+    flex-wrap: wrap;
+  }
+
+  .admin-enlace code {
+    flex-basis: 100%;
+  }
+}

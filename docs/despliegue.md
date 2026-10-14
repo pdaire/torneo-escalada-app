@@ -68,8 +68,8 @@ Una sola vez, en la consola de Firebase:
 ## Una competencia nueva para un club
 
 1. En *Authentication → Users*, crear la cuenta del organizador del club (correo y clave).
-2. En `/admin` → **Nueva competencia**: nombre, dirección, fecha, club, lugar y el correo del organizador.
-3. Enviarle al organizador `https://torneo-escalada-app.web.app/{competencia}/admin`. Desde ahí arma etapas y competidores, y agrega a sus jueces y delegados (sus cuentas también se crean en *Authentication → Users*).
+2. En `/admin` → **Nueva competencia**: nombre (revisar la dirección), fecha, club, lugar, formato y el correo del organizador.
+3. En la tarjeta que aparece, **Copiar mensaje para el organizador** y enviárselo junto con su clave. Desde su admin carga competidores y agrega a sus jueces y delegados (sus cuentas también se crean en *Authentication → Users*).
 4. Cuando esté lista, **Publicar en la portada**.
 
 Las competencias creadas antes de este cambio conservan su id como dirección (por ejemplo `/baguales-2026`).
