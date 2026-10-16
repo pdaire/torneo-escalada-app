@@ -60,6 +60,14 @@ describe('ronda americana', async () => {
     expect(reglasAmericana({ formato: 'americana', tablaPuntos: { B1: [1, 1, 1, 1] } }).maxIntentos).toBe(4);
   });
 
+  it('por sector: A1 y B1 son bloques distintos con sus propios puntos', () => {
+    const etapa = { formato: 'americana', numeracion: 'sector', maxIntentos: 3, mejoresBloques: 5,
+      boulders: ['A1', 'A2', 'B1', 'B2'], tablaPuntos: { A1: [10, 8, 6], A2: [12, 10, 8], B1: [30, 20, 10], B2: [40, 35, 30] } };
+    const { puntaje, cuentan } = puntajeDeEtapa(etapa, { A1: { topEnIntento: 1 }, B1: { topEnIntento: 2 } });
+    expect(cuentan).toEqual(['B1', 'A1']);
+    expect(puntaje).toBe(20 + 10);
+  });
+
   it('World Climbing sigue sumando todos los bloques en décimas', () => {
     const wc = { formato: 'wc', boulders: ['W1', 'W2'] };
     expect(puntajeDeEtapa(wc, { W1: { topEnIntento: 1, zonaEnIntento: 1 }, W2: { zonaEnIntento: 2 } }).puntaje).toBe(250 + 99);

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   addDoc, collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
@@ -157,6 +157,22 @@ describe('resultados', () => {
     await denegado(guardarResultado(jefe, clave, marcador(1, { intentos: 3, zonaEnIntento: 2, topEnIntento: 2 }), 'top', 'jefe@club.cl'));
     await permitido(guardarResultado(jefe, clave, marcador(1, { intentos: 5 }), 'intento', 'jefe@club.cl'));
     await permitido(guardarResultado(jefe, clave, marcador(2, { intentos: 5, zonaEnIntento: 5, topEnIntento: 5 }), 'top', 'jefe@club.cl'));
+  });
+
+  it('ronda americana por sector: A1 y B1 son bloques distintos y el juez del sector A solo anota en A', async () => {
+    const { plantilla } = await import('../../src/data/plantillas');
+    const [{ id, ...etapa }] = plantilla('americana-sectores').etapas();
+    const db = sinReglas();
+    await setDoc(doc(db, `competencias/${C}/etapas/${id}`), etapa);
+    await setDoc(doc(db, `competencias/${C}/miembros/sectora@club.cl`), { rol: 'juez', asignaciones: { [id]: etapa.sectores.A } });
+    const juez = usuario('sectora@club.cl');
+    const claveBloque = (boulderId) => ({ competenciaId: C, etapaId: id, competidorId: 'damas-1', boulderId });
+    const top = { intentos: 1, zonaEnIntento: 1, topEnIntento: 1, version: 1 };
+    await permitido(guardarResultado(juez, claveBloque('A1'), top, 'top', 'sectora@club.cl'));
+    await denegado(guardarResultado(juez, claveBloque('B1'), top, 'top', 'sectora@club.cl'));
+    // A1 quedó anotado y B1 sigue sin resultado: son documentos distintos.
+    expect((await getDoc(doc(anonimo(), `resultados/${C}__${id}__damas-1__A1`))).exists()).toBe(true);
+    expect((await getDoc(doc(anonimo(), `resultados/${C}__${id}__damas-1__B1`))).exists()).toBe(false);
   });
 
   it('el historial no se edita ni se escribe suelto', async () => {

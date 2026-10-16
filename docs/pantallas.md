@@ -126,7 +126,7 @@ Solo para el super admin: una cuenta que está en `admins` y entra con **Google*
 - **Nueva competencia:**
   - **Nombre:** mientras se escribe aparece la dirección completa ("Copa Chile 2026" → `…/copa-chile-2026`) y si está disponible. Se puede cambiar con **cambiar dirección**, pero no después de crearla: es el id de la competencia.
   - **Fecha, club organizador y lugar.**
-  - **Formato:** una plantilla con las etapas ya armadas. **Vacía**; **Ronda americana** (24 bloques en 4 sectores, tabla clásica, suman 5); o **Clasificatoria americana + final World Climbing**. Todo se ajusta después en el admin de la competencia.
+  - **Formato:** una plantilla con las etapas ya armadas. **Vacía**; **Ronda americana** (24 bloques en 4 sectores, tabla clásica, suman 5); **Ronda americana por sectores** (A1–A7, B1–B7, C1–C7, cada bloque con sus puntos); o **Clasificatoria americana + final World Climbing**. Todo se ajusta después en el admin de la competencia.
   - **Organizador** (opcional): su correo. Su cuenta se crea aparte en *Authentication → Users*.
 
   Se crea oculta de la portada. Después aparece una tarjeta con las direcciones para copiar (admin del club, jueces, delegados, tablero), **Copiar mensaje para el organizador** (un texto con sus direcciones y los primeros pasos, para WhatsApp o correo), **Abrir su admin** y **Publicar en la portada**.
@@ -141,7 +141,7 @@ Arriba están las direcciones para compartir (tablero, tablet del juez, delegado
 
 1. Agregar etapas (qualis, semifinal, final) con su formato y, si corresponde, la etapa previa.
    - **World Climbing:** bloques (por ejemplo W1–W4, M1–M4) y duración del turno.
-   - **Ronda americana:** tabla de puntos (pegada como CSV o generada con la fórmula de la cartilla clásica), cuántos bloques suman y sectores (`A: 1, 8, 23, 32; B: 2, 9, 16`). La tabla y los sectores se editan después con **Tabla de puntos** y **Sectores**. No tiene orden de paso. Ver [Puntuación](puntuacion.md#ronda-americana).
+   - **Ronda americana:** numeración **única** (B1…BN) o **por sector** (A1…A7, B1…B7), tabla de puntos (pegada como CSV o generada con la fórmula), cuántos bloques suman y, con numeración única, los sectores (`A: 1, 8, 23, 32; B: 2, 9, 16`). Por sector, los sectores salen de la tabla. La tabla y los sectores se editan después con **Tabla de puntos** y **Sectores**. No tiene orden de paso. Ver [Puntuación](puntuacion.md#ronda-americana).
 
     Marcar una como activa (una por competencia). **Cerrar** bloquea los resultados de la etapa. En una etapa abierta, cada categoría se puede **finalizar** por separado.
 2. Cargar competidores uno a uno o con CSV `dorsal,nombre,categoria`. Una competidora con resultados no se puede quitar.

@@ -43,6 +43,7 @@ erDiagram
         string estado "abierta | cerrada"
         map sectores "americana: nombre a lista de bloques"
         map tablaPuntos "americana: bloque a puntos por intento"
+        string numeracion "americana: unica (B1…BN) | sector (A1, B1…)"
         number maxIntentos "americana (5)"
         number mejoresBloques "americana (5)"
         string_array categoriasCerradas "categoriaId finalizadas"
@@ -168,7 +169,7 @@ Los resultados anteriores a este cambio no tienen `version`. Se leen como versi�
 
 `categoriasCerradas` finaliza categorías sueltas dentro de una etapa abierta, por ejemplo cuando una final termina antes que otra. Las reglas bloquean los resultados de esas categorías y el tablero las marca como finalizadas.
 
-`formato` define cómo se puntúa: `wc` (World Climbing, el valor por defecto) o `americana`. Una ronda americana tiene bloques `B1`…`BN` que comparten todas las categorías y no tiene turnos. Guarda en la etapa su tabla de puntos (`tablaPuntos`, por ejemplo `{ B1: [10, 8, 6, 4, 2], … }`), definida por los organizadores. Una etapa americana sin `tablaPuntos` usa la fórmula clásica. `sectores` agrupa los bloques que revisa cada juez; al asignar un sector a un juez se guardan sus bloques en `asignaciones`. Ver [Puntuación](puntuacion.md#ronda-americana).
+`formato` define cómo se puntúa: `wc` (World Climbing, el valor por defecto) o `americana`. Una ronda americana tiene bloques `B1`…`BN` que comparten todas las categorías y no tiene turnos. Guarda en la etapa su tabla de puntos (`tablaPuntos`, por ejemplo `{ B1: [10, 8, 6, 4, 2], … }`), definida por los organizadores. Una etapa americana sin `tablaPuntos` usa la fórmula clásica. `sectores` agrupa los bloques que revisa cada juez; al asignar un sector a un juez se guardan sus bloques en `asignaciones`. Con `numeracion: sector`, cada sector numera desde 1 (A1, B1…), los ids de los bloques llevan el sector y los sectores se derivan de la tabla de puntos. Ver [Puntuación](puntuacion.md#ronda-americana).
 
 `etapaPreviaId` encadena rondas: desempata el ranking con la posición en la etapa previa y permite generar el orden de paso con sus clasificadas.
 

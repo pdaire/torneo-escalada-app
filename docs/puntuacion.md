@@ -83,6 +83,26 @@ En `/admin` la tabla se crea de dos formas:
 - **Pegar CSV:** una fila por bloque con el número del bloque y los puntos por intento. Se puede copiar desde una planilla (tabulación, coma o punto y coma); el encabezado es opcional.
 - **Generar con fórmula:** un atajo para la cartilla clásica, `base + incremento × (N − 1) − descuento × (k − 1)`. Con 10, 2 y 2 queda B1 = 10 8 6 4 2 … B24 = 56 54 52 50 48.
 
+### Numeración por sector
+
+Una ronda americana puede numerar sus bloques de dos formas:
+
+| Numeración | Bloques | Sectores |
+| --- | --- | --- |
+| **Única** | B1, B2… B24 en toda la etapa | Se escriben aparte (`A: 1, 5, 9; B: 2, 6, 10`) y agrupan esos números |
+| **Por sector** | Cada sector numera desde 1: A1…A7, B1…B7, C1…C7 | Salen de la tabla de puntos |
+
+Por sector, A1 y B1 son bloques distintos y cada uno tiene su propia fila de puntos (si valen lo mismo, se repite el valor). La tabla lleva una columna más:
+
+```text
+Sector,Bloque,Intento 1,Intento 2,Intento 3,Intento 4,Intento 5
+A,1,10,8,6,4,2
+A,2,12,10,8,6,4
+B,1,30,20,10
+```
+
+Agregar o quitar filas cambia los bloques de cada sector. El nombre del sector usa letras y números sin espacios (`A`, `Norte`); el bloque se muestra como `A3` o `NORTE3` (si el sector termina en número, con guion: `S1-3`). La fórmula, en este modo, genera la misma tabla en cada sector como punto de partida.
+
 Después se revisa y edita con **Tabla de puntos**. Como los puntos no se guardan en los resultados, cambiar la tabla recalcula el tablero de inmediato.
 
 No hay zonas: solo cuenta encadenar. Sin encadenar dentro del máximo de intentos, el bloque vale 0.

@@ -8,7 +8,14 @@ import { resultadosColRef } from '../utils/resultado';
 import { ordenDeSalida, rankingPorCategoria } from '../utils/ranking';
 import { AMERICANA_POR_DEFECTO, FORMATOS, esAmericana, puntosAmericana, reglasAmericana } from '../utils/score';
 import { parsearSectores, textoDeSectores } from '../utils/sectores';
-import { generarTablaPuntos, parsearTablaPuntos, tablaACsv } from '../utils/tablaPuntos';
+import {
+  generarTablaPorSector,
+  generarTablaPuntos,
+  parsearTablaPorSector,
+  parsearTablaPuntos,
+  tablaACsv,
+  tablaPorSectorACsv,
+} from '../utils/tablaPuntos';
 import './admin.css';
 import {
   competenciaRef,
@@ -53,6 +60,8 @@ export default function AdminCompetencia() {
   const [asignacion, setAsignacion] = useState({ correo: '', etapaId: '' });
   const [formatoNueva, setFormatoNueva] = useState('wc');
   const [origenTabla, setOrigenTabla] = useState('formula');
+  // Ronda americana: 'unica' (B1…BN, sectores aparte) o 'sector' (A1…A7, B1…B7; la tabla define los sectores).
+  const [numeracionNueva, setNumeracionNueva] = useState('unica');
   const [tablaAbierta, setTablaAbierta] = useState(null);
 
   useEffect(() => {
@@ -114,20 +123,34 @@ export default function AdminCompetencia() {
         const valor = Number(datos.get(clave));
         return Number.isFinite(valor) && valor >= 0 ? valor : AMERICANA_POR_DEFECTO[clave];
       };
-      const generada = origenTabla === 'csv'
-        ? parsearTablaPuntos(datos.get('tablaCsv'))
-        : generarTablaPuntos({
-          cantidad: Number(datos.get('cantidad')) || 24,
-          puntajeBase: numero('puntajeBase'),
-          incrementoPorBloque: numero('incrementoPorBloque'),
-          descuentoPorIntento: numero('descuentoPorIntento'),
-          maxIntentos: Math.max(1, numero('maxIntentos')),
-        });
+      const porSector = numeracionNueva === 'sector';
+      const formula = {
+        puntajeBase: numero('puntajeBase'),
+        incrementoPorBloque: numero('incrementoPorBloque'),
+        descuentoPorIntento: numero('descuentoPorIntento'),
+        maxIntentos: Math.max(1, numero('maxIntentos')),
+      };
+      let generada;
+      if (origenTabla === 'csv') {
+        generada = porSector ? parsearTablaPorSector(datos.get('tablaCsv')) : parsearTablaPuntos(datos.get('tablaCsv'));
+      } else if (porSector) {
+        const nombres = String(datos.get('nombresSectores') || '').split(/[,;\s]+/).filter(Boolean);
+        if (!nombres.length || nombres.some((nombre) => !/^[A-Za-z][A-Za-z0-9]{0,11}$/.test(nombre))) {
+          setError('Escribe los sectores separados por coma, con letras y números sin espacios. Ejemplo: A, B, C.');
+          return;
+        }
+        generada = generarTablaPorSector({ ...formula, sectores: nombres, bloquesPorSector: Number(datos.get('bloquesPorSector')) || 7 });
+      } else {
+        generada = generarTablaPuntos({ ...formula, cantidad: Number(datos.get('cantidad')) || 24 });
+      }
       if (generada.error) {
         setError(`Tabla de puntos: ${generada.error}`);
         return;
       }
-      const { sectores, error: errorSectores } = parsearSectores(datos.get('sectores'), generada.boulders);
+      // Por sector, los sectores salen de la tabla; si no, se escriben aparte.
+      const { sectores, error: errorSectores } = porSector
+        ? { sectores: generada.sectores }
+        : parsearSectores(datos.get('sectores'), generada.boulders);
       if (errorSectores) {
         setError(errorSectores);
         return;
@@ -138,6 +161,7 @@ export default function AdminCompetencia() {
         tablaPuntos: generada.tabla,
         maxIntentos: generada.maxIntentos,
         mejoresBloques: Math.max(1, numero('mejoresBloques')),
+        numeracion: porSector ? 'sector' : 'unica',
         sectores,
       };
     } else {
@@ -157,13 +181,15 @@ export default function AdminCompetencia() {
   // Cambia la tabla de puntos de una etapa americana. Los puntajes se recalculan
   // al mostrarlos, así que el tablero refleja la tabla nueva de inmediato.
   const guardarTabla = (etapa, texto, mejores) => {
-    const leida = parsearTablaPuntos(texto);
+    const porSector = etapa.numeracion === 'sector';
+    const leida = porSector ? parsearTablaPorSector(texto) : parsearTablaPuntos(texto);
     if (leida.error) {
       setError(`Tabla de puntos: ${leida.error}`);
       return;
     }
     const quitados = (etapa.boulders || []).filter((id) => !leida.boulders.includes(id));
-    const enSectores = quitados.filter((id) => Object.values(etapa.sectores || {}).some((ids) => ids.includes(id)));
+    // Por sector, los sectores salen de la tabla nueva; si no, tienen que seguir existiendo sus bloques.
+    const enSectores = porSector ? [] : quitados.filter((id) => Object.values(etapa.sectores || {}).some((ids) => ids.includes(id)));
     if (enSectores.length) {
       setError(`Quita primero de los sectores los bloques que ya no están en la tabla: ${enSectores.join(', ')}.`);
       return;
@@ -175,6 +201,7 @@ export default function AdminCompetencia() {
         tablaPuntos: leida.tabla,
         maxIntentos: leida.maxIntentos,
         mejoresBloques: Math.max(1, Number(mejores) || reglasAmericana(etapa).mejoresBloques),
+        ...(porSector ? { sectores: leida.sectores } : {}),
       });
       setTablaAbierta(null);
     });
@@ -484,6 +511,11 @@ export default function AdminCompetencia() {
               ) : (
                 <>
                   <div className="admin-row">
+                    <span>Numeración:</span>
+                    <label><input type="radio" checked={numeracionNueva === 'unica'} onChange={() => setNumeracionNueva('unica')} /> Única (B1, B2… B24)</label>
+                    <label><input type="radio" checked={numeracionNueva === 'sector'} onChange={() => setNumeracionNueva('sector')} /> Por sector (A1…A7, B1…B7)</label>
+                  </div>
+                  <div className="admin-row">
                     <span>Tabla de puntos:</span>
                     <label><input type="radio" checked={origenTabla === 'formula'} onChange={() => setOrigenTabla('formula')} /> Generar con fórmula</label>
                     <label><input type="radio" checked={origenTabla === 'csv'} onChange={() => setOrigenTabla('csv')} /> Pegar CSV</label>
@@ -491,8 +523,15 @@ export default function AdminCompetencia() {
                   </div>
                   {origenTabla === 'formula' ? (
                     <div className="admin-row">
-                      <label>Bloques <input name="cantidad" type="number" min="1" max="99" defaultValue="24" className="admin-field-narrow" /></label>
-                      <label>B1 al 1.er intento <input name="puntajeBase" type="number" min="0" defaultValue={AMERICANA_POR_DEFECTO.puntajeBase} className="admin-field-narrow" /></label>
+                      {numeracionNueva === 'sector' ? (
+                        <>
+                          <label>Sectores <input name="nombresSectores" defaultValue="A, B, C" className="admin-field-narrow" style={{ width: '8rem' }} /></label>
+                          <label>Bloques por sector <input name="bloquesPorSector" type="number" min="1" max="99" defaultValue="7" className="admin-field-narrow" /></label>
+                        </>
+                      ) : (
+                        <label>Bloques <input name="cantidad" type="number" min="1" max="99" defaultValue="24" className="admin-field-narrow" /></label>
+                      )}
+                      <label>{numeracionNueva === 'sector' ? 'Bloque 1' : 'B1'} al 1.er intento <input name="puntajeBase" type="number" min="0" defaultValue={AMERICANA_POR_DEFECTO.puntajeBase} className="admin-field-narrow" /></label>
                       <label>+ por bloque <input name="incrementoPorBloque" type="number" min="0" defaultValue={AMERICANA_POR_DEFECTO.incrementoPorBloque} className="admin-field-narrow" /></label>
                       <label>− por intento <input name="descuentoPorIntento" type="number" min="0" defaultValue={AMERICANA_POR_DEFECTO.descuentoPorIntento} className="admin-field-narrow" /></label>
                       <label>Máx. intentos <input name="maxIntentos" type="number" min="1" defaultValue={AMERICANA_POR_DEFECTO.maxIntentos} className="admin-field-narrow" /></label>
@@ -503,22 +542,28 @@ export default function AdminCompetencia() {
                         name="tablaCsv"
                         rows={8}
                         required
-                        placeholder={'Bloque,Intento 1,Intento 2,Intento 3,Intento 4,Intento 5\n1,10,8,6,4,2\n2,12,10,8,6,4\n…'}
+                        placeholder={numeracionNueva === 'sector'
+                          ? 'Sector,Bloque,Intento 1,Intento 2,Intento 3,Intento 4,Intento 5\nA,1,10,8,6,4,2\nA,2,12,10,8,6,4\nB,1,10,8,6,4,2\n…'
+                          : 'Bloque,Intento 1,Intento 2,Intento 3,Intento 4,Intento 5\n1,10,8,6,4,2\n2,12,10,8,6,4\n…'}
                       />
                       <p className="admin-meta">
-                        Una fila por bloque: el número del bloque y los puntos al 1.er intento, al 2.º, etc. Se puede copiar desde una planilla
+                        {numeracionNueva === 'sector'
+                          ? 'Una fila por bloque: el sector, el número del bloque en ese sector y los puntos al 1.er intento, al 2.º, etc. Cada bloque tiene sus propios puntos (A1 y B1 pueden valer distinto). '
+                          : 'Una fila por bloque: el número del bloque y los puntos al 1.er intento, al 2.º, etc. '} Se puede copiar desde una planilla
                         (columnas separadas por tabulación, coma o punto y coma). El encabezado es opcional. La cantidad de columnas define el máximo de intentos.
                       </p>
                     </div>
                   )}
                   <div className="admin-row">
-                    <label style={{ flex: 1 }}>Sectores <input name="sectores" placeholder="A: 1, 8, 23, 32; B: 2, 9, 16" style={{ width: '100%' }} /></label>
+                    {numeracionNueva === 'unica' && (
+                      <label style={{ flex: 1 }}>Sectores <input name="sectores" placeholder="A: 1, 8, 23, 32; B: 2, 9, 16" style={{ width: '100%' }} /></label>
+                    )}
                     <button className="admin-btn">Agregar</button>
                   </div>
                   <p className="admin-meta">
                     Todas las categorías escalan los mismos bloques. Suman los mejores bloques de cada competidora.
-                    La fórmula es solo un atajo para la cartilla clásica (B1 vale 10, 8, 6, 4, 2 y cada bloque siguiente 2 más);
-                    la tabla se puede revisar y editar después con <strong>Tabla de puntos</strong>. Los sectores agrupan los bloques que revisa cada juez.
+                    La fórmula es solo un atajo (el bloque 1 vale 10, 8, 6, 4, 2 y cada bloque siguiente 2 más; por sector, igual en cada sector);
+                    la tabla se puede revisar y editar después con <strong>Tabla de puntos</strong>, bloque por bloque. Los sectores agrupan los bloques que revisa cada juez.
                   </p>
                 </>
               )}
@@ -529,8 +574,12 @@ export default function AdminCompetencia() {
                 <strong>{item.nombre}</strong>
                 <span className="admin-meta">
                   {esAmericana(item)
-                    ? `${FORMATOS.americana} · ${item.boulders?.length} bloques · suman ${reglasAmericana(item).mejoresBloques} · máx. ${reglasAmericana(item).maxIntentos} intentos${item.tablaPuntos ? '' : ' · tabla por fórmula'}`
-                      + (Object.keys(item.sectores || {}).length ? ` · sectores ${textoDeSectores(item.sectores)}` : '')
+                    ? `${FORMATOS.americana}${item.numeracion === 'sector' ? ' por sector' : ''} · ${item.boulders?.length} bloques · suman ${reglasAmericana(item).mejoresBloques} · máx. ${reglasAmericana(item).maxIntentos} intentos${item.tablaPuntos ? '' : ' · tabla por fórmula'}`
+                      + (Object.keys(item.sectores || {}).length
+                        ? (item.numeracion === 'sector'
+                          ? ` · sectores ${Object.entries(item.sectores).map(([nombre, ids]) => `${nombre} (${ids.length})`).join(', ')}`
+                          : ` · sectores ${textoDeSectores(item.sectores)}`)
+                        : '')
                     : item.boulders?.join(', ')}
                   {item.etapaPreviaId ? ` · después de ${nombreEtapa(item.etapaPreviaId)}` : ''}
                   {item.estado === 'cerrada' ? ' · cerrada' : ''}
@@ -539,7 +588,7 @@ export default function AdminCompetencia() {
                 <button onClick={() => cambiarEstadoEtapa(item)} className="admin-btn-secondary">
                   {item.estado === 'cerrada' ? 'Reabrir' : 'Cerrar'}
                 </button>
-                {esAmericana(item) && <button onClick={() => editarSectores(item)} className="admin-btn-secondary">Sectores</button>}
+                {esAmericana(item) && item.numeracion !== 'sector' && <button onClick={() => editarSectores(item)} className="admin-btn-secondary">Sectores</button>}
                 {esAmericana(item) && (
                   <button onClick={() => setTablaAbierta((abierta) => (abierta === item.id ? null : item.id))} className="admin-btn-secondary">
                     Tabla de puntos
@@ -709,7 +758,9 @@ function EditorTabla({ etapa, onGuardar, onCerrar }) {
   const tabla = etapa.tablaPuntos || Object.fromEntries((etapa.boulders || []).map((id) => [
     id, Array.from({ length: reglas.maxIntentos }, (_, intento) => puntosAmericana(etapa, id, intento + 1)),
   ]));
-  const [texto, setTexto] = useState(() => tablaACsv(etapa.boulders, tabla));
+  const [texto, setTexto] = useState(() => (etapa.numeracion === 'sector'
+    ? tablaPorSectorACsv(etapa.sectores, tabla)
+    : tablaACsv(etapa.boulders, tabla)));
   const [mejores, setMejores] = useState(reglas.mejoresBloques);
   return (
     <div className="admin-stack">
@@ -719,7 +770,12 @@ function EditorTabla({ etapa, onGuardar, onCerrar }) {
         <button onClick={() => onGuardar(etapa, texto, mejores)} className="admin-btn">Guardar tabla</button>
         <button onClick={onCerrar} className="admin-btn-secondary">Cancelar</button>
       </div>
-      <p className="admin-meta">Se puede copiar y pegar desde una planilla. Los puntajes del tablero se recalculan con la tabla nueva.</p>
+      <p className="admin-meta">
+        {etapa.numeracion === 'sector'
+          ? 'Una fila por bloque: sector, número y puntos por intento. La tabla define los sectores: agregar o quitar filas cambia los bloques de cada sector. '
+          : ''}
+        Se puede copiar y pegar desde una planilla. Los puntajes del tablero se recalculan con la tabla nueva.
+      </p>
     </div>
   );
 }

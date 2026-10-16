@@ -1,7 +1,7 @@
 // Plantillas para crear una competencia con sus etapas ya armadas.
 // El organizador después solo carga competidores y jueces (y ajusta lo que quiera).
 import { AMERICANA_POR_DEFECTO } from '../utils/score';
-import { generarTablaPuntos } from '../utils/tablaPuntos';
+import { generarTablaPorSector, generarTablaPuntos } from '../utils/tablaPuntos';
 
 const ETAPA_BASE = { estado: 'abierta', categoriasCerradas: [] };
 
@@ -41,6 +41,31 @@ export const PLANTILLAS = [
     nombre: 'Ronda americana',
     descripcion: '1 etapa, 24 bloques B1–B24 en 4 sectores, tabla clásica (10, 8, 6…), suman los 5 mejores.',
     etapas: () => [{ ...rondaAmericana('ronda-americana', 'Ronda americana', 'qualis', 24), activa: true }],
+  },
+  {
+    id: 'americana-sectores',
+    nombre: 'Ronda americana por sectores',
+    descripcion: '1 etapa, 3 sectores con numeración propia (A1–A7, B1–B7, C1–C7). Cada bloque tiene su propia fila de puntos; parte con la misma tabla en cada sector.',
+    etapas: () => {
+      const { boulders, tabla, maxIntentos, sectores } = generarTablaPorSector({
+        ...AMERICANA_POR_DEFECTO, sectores: ['A', 'B', 'C'], bloquesPorSector: 7,
+      });
+      return [{
+        ...ETAPA_BASE,
+        id: 'ronda-americana',
+        nombre: 'Ronda americana',
+        tipo: 'qualis',
+        formato: 'americana',
+        numeracion: 'sector',
+        boulders,
+        tablaPuntos: tabla,
+        maxIntentos,
+        mejoresBloques: AMERICANA_POR_DEFECTO.mejoresBloques,
+        sectores,
+        etapaPreviaId: null,
+        activa: true,
+      }];
+    },
   },
   {
     id: 'americana-final',

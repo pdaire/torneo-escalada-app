@@ -59,3 +59,91 @@ export function tablaACsv(boulders = [], tabla = {}) {
   const encabezado = ['Bloque', ...Array.from({ length: intentos }, (_, i) => `Intento ${i + 1}`)].join(',');
   return [encabezado, ...boulders.map((id) => [id.replace(/^B/, ''), ...(tabla[id] || [])].join(','))].join('\n');
 }
+
+// ---- Numeración por sector ----
+// Cada sector numera sus bloques desde 1 (A1…A7, B1…B7). Cada bloque tiene su propia
+// fila de puntos: A1 y B1 pueden valer distinto. La tabla define también los sectores.
+
+const NOMBRE_SECTOR = /^[A-Za-z][A-Za-z0-9]{0,11}$/;
+
+// Id del bloque: el nombre del sector y el número (A + 3 → "A3"). Si el nombre del
+// sector termina en dígito, se separa con guion (S1 + 3 → "S1-3").
+export function idBloqueSector(sector, numero) {
+  const nombre = String(sector).toUpperCase();
+  return /\d$/.test(nombre) ? `${nombre}-${numero}` : `${nombre}${numero}`;
+}
+
+// Una fila por bloque: sector, número, puntos al 1.er intento, al 2.º, …
+export function parsearTablaPorSector(texto) {
+  const filas = String(texto || '')
+    .split(/\r?\n/)
+    .map((linea) => linea.trim())
+    .filter(Boolean)
+    .map((linea) => linea.split(/[\t,;]/).map((celda) => celda.trim()));
+  if (!filas.length) return { error: 'Pega al menos una fila: sector, bloque y puntos por intento.' };
+
+  // La primera fila es encabezado si su segunda columna no es un número de bloque
+  // (por ejemplo "Sector, Bloque, Intento 1…" o "Sector, Bloque, 1, 2, 3").
+  const conEncabezado = !/^\d+$/.test(filas[0][1] || '');
+  const datos = conEncabezado ? filas.slice(1) : filas;
+  if (!datos.length) return { error: 'La tabla solo tiene encabezado.' };
+
+  const tabla = {};
+  const boulders = [];
+  const sectores = {};
+  for (const [indice, fila] of datos.entries()) {
+    const numeroFila = indice + (conEncabezado ? 2 : 1);
+    const [sector, numero, ...celdas] = fila;
+    if (!NOMBRE_SECTOR.test(sector || '')) {
+      return { error: `Fila ${numeroFila}: "${sector}" no es un nombre de sector. Usa letras y números, sin espacios (A, B, Norte).` };
+    }
+    if (!/^\d+$/.test(numero || '') || Number(numero) < 1) {
+      return { error: `Fila ${numeroFila}: "${numero}" no es un número de bloque.` };
+    }
+    const nombre = sector.toUpperCase();
+    const id = idBloqueSector(nombre, Number(numero));
+    if (tabla[id]) return { error: `El bloque ${nombre} ${Number(numero)} aparece dos veces.` };
+    const valores = celdas.filter((celda, posicion) => celda !== '' || celdas.slice(posicion).some(Boolean));
+    const puntos = valores.map((celda) => Number(celda.replace(',', '.')));
+    if (!puntos.length) return { error: `Fila ${numeroFila}: el bloque ${id} no tiene puntos.` };
+    if (puntos.some((valor) => !Number.isFinite(valor) || valor < 0)) {
+      return { error: `Fila ${numeroFila}: los puntos del bloque ${id} tienen que ser números, cero o más.` };
+    }
+    tabla[id] = puntos;
+    boulders.push(id);
+    (sectores[nombre] ||= []).push(id);
+  }
+  const maxIntentos = Math.max(...Object.values(tabla).map((puntos) => puntos.length));
+  return { tabla, boulders, maxIntentos, sectores };
+}
+
+// Atajo: la misma fórmula en cada sector (después se puede editar bloque por bloque).
+export function generarTablaPorSector({ sectores, bloquesPorSector, puntajeBase, incrementoPorBloque, descuentoPorIntento, maxIntentos }) {
+  const tabla = {};
+  const boulders = [];
+  const resultado = {};
+  sectores.forEach((sector) => {
+    const nombre = sector.toUpperCase();
+    resultado[nombre] = [];
+    for (let numero = 1; numero <= bloquesPorSector; numero += 1) {
+      const id = idBloqueSector(nombre, numero);
+      boulders.push(id);
+      resultado[nombre].push(id);
+      tabla[id] = Array.from({ length: maxIntentos }, (_, intento) => (
+        Math.max(0, puntajeBase + (incrementoPorBloque * (numero - 1)) - (descuentoPorIntento * intento))
+      ));
+    }
+  });
+  return { tabla, boulders, maxIntentos, sectores: resultado };
+}
+
+export function tablaPorSectorACsv(sectores = {}, tabla = {}) {
+  const ids = Object.values(sectores).flat();
+  const intentos = Math.max(0, ...ids.map((id) => (tabla[id] || []).length));
+  const encabezado = ['Sector', 'Bloque', ...Array.from({ length: intentos }, (_, i) => `Intento ${i + 1}`)].join(',');
+  const filas = Object.entries(sectores).flatMap(([sector, idsSector]) => idsSector.map((id) => {
+    const numero = id.slice(sector.length).replace(/^-/, '');
+    return [sector, numero, ...(tabla[id] || [])].join(',');
+  }));
+  return [encabezado, ...filas].join('\n');
+}
