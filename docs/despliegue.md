@@ -92,6 +92,14 @@ Levanta los emuladores de Firestore y Authentication, carga las dos demos (la co
 
 Cada vez que se corre, la demo parte de cero. Necesita Java, igual que `test:rules`.
 
+## Dependencias
+
+| Paquete | Para qué |
+| --- | --- |
+| `firebase` | Firestore, Authentication |
+| `react`, `react-dom`, `react-router-dom` | Interfaz y rutas |
+| `write-excel-file` | Exportar a Excel. Se carga solo al presionar **Descargar Excel** (un archivo aparte de ~20 KB) |
+
 ## Tests
 
 ```bash

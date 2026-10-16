@@ -5,6 +5,7 @@ import { arrayRemove, arrayUnion, deleteDoc, doc, getDocs, limit, onSnapshot, qu
 import { auth, db } from '../firebase';
 import { useEsAdmin, useMiembro, useUsuario } from '../hooks/useSesion';
 import { resultadosColRef } from '../utils/resultado';
+import { construirLibro, nombreArchivo } from '../utils/exportacion';
 import { ordenDeSalida, rankingPorCategoria } from '../utils/ranking';
 import { AMERICANA_POR_DEFECTO, FORMATOS, esAmericana, puntosAmericana, reglasAmericana } from '../utils/score';
 import { parsearSectores, textoDeSectores } from '../utils/sectores';
@@ -18,6 +19,7 @@ import {
 } from '../utils/tablaPuntos';
 import './admin.css';
 import {
+  apelacionesCol,
   competenciaRef,
   competidoresCol,
   docsConId,
@@ -60,6 +62,7 @@ export default function AdminCompetencia() {
   const [asignacion, setAsignacion] = useState({ correo: '', etapaId: '' });
   const [formatoNueva, setFormatoNueva] = useState('wc');
   const [origenTabla, setOrigenTabla] = useState('formula');
+  const [exportando, setExportando] = useState(false);
   // Ronda americana: 'unica' (B1…BN, sectores aparte) o 'sector' (A1…A7, B1…B7; la tabla define los sectores).
   const [numeracionNueva, setNumeracionNueva] = useState('unica');
   const [tablaAbierta, setTablaAbierta] = useState(null);
@@ -90,6 +93,30 @@ export default function AdminCompetencia() {
       unsubMiembros();
     };
   }, [autorizado, competenciaId]);
+
+  // Descarga un .xlsx con el resumen, el ranking de cada etapa, los resultados
+  // anotados, los competidores y las apelaciones. La librería se carga recién aquí.
+  const exportarExcel = () => {
+    setExportando(true);
+    ejecutar(async () => {
+      const [resultados, apelaciones, { default: writeExcelFile }] = await Promise.all([
+        getDocs(query(resultadosColRef(db), where('competenciaId', '==', competenciaId))),
+        getDocs(apelacionesCol(db, competenciaId)),
+        import('write-excel-file/browser'),
+      ]);
+      const generado = new Date();
+      const hojas = construirLibro({
+        competencia: { id: competenciaId, ...competencia },
+        etapas,
+        competidores,
+        turnos,
+        resultados: resultados.docs.map((item) => item.data()),
+        apelaciones: apelaciones.docs.map((item) => item.data()),
+        generado,
+      });
+      await writeExcelFile(hojas).toFile(nombreArchivo({ id: competenciaId }, generado));
+    }).finally(() => setExportando(false));
+  };
 
   const ejecutar = async (accion) => {
     try {
@@ -479,6 +506,20 @@ export default function AdminCompetencia() {
         ))}
         <p className="admin-meta">
           {competencia?.activa ? 'Aparece en la portada.' : 'No aparece en la portada (la publica el administrador de la plataforma), pero las direcciones funcionan igual.'}
+        </p>
+      </section>
+
+      <section className="admin-section">
+        <h2>Exportar resultados</h2>
+        <div className="admin-row">
+          <button onClick={exportarExcel} disabled={exportando} className="admin-btn">
+            {exportando ? 'Preparando Excel…' : 'Descargar Excel'}
+          </button>
+        </div>
+        <p className="admin-meta">
+          Un archivo .xlsx con el resumen de la competencia, el ranking de cada etapa por categoría (con cada bloque),
+          todos los resultados anotados (intentos, zona, top, puntos, quién anotó y cuándo), los competidores y las apelaciones.
+          Refleja lo anotado hasta el momento de descargarlo.
         </p>
       </section>
 

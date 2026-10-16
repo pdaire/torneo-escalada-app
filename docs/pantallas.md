@@ -137,7 +137,21 @@ Solo para el super admin: una cuenta que está en `admins` y entra con **Google*
 
 Para el admin de la plataforma y para los **organizadores** de esa competencia. Un organizador solo ve y cambia su competencia: no puede crear otras ni publicarla en la portada, y no anota resultados salvo que también se agregue como juez.
 
-Arriba están las direcciones para compartir (tablero, tablet del juez, delegados).
+Arriba están las direcciones para compartir (tablero, tablet del juez, delegados) y **Descargar Excel**.
+
+### Exportar resultados
+
+**Descargar Excel** baja un `.xlsx` (`{competencia}-resultados-{fecha}.xlsx`) con lo anotado hasta ese momento:
+
+| Hoja | Contenido |
+| --- | --- |
+| Resumen | Datos de la competencia, fecha de exportación y, por etapa, formato, estado, participantes y resultados anotados |
+| Una por etapa | Ranking por categoría: posición, dorsal, nombre, cada bloque y puntaje. World Climbing: `T3 z1` (top en el 3.er intento, zona en el 1.º), `z2` o vacío, y la posición en la etapa previa que desempata. Ronda americana: puntaje, tops, bloques que suman y, por bloque, `✓2` (encadenó en el 2.º intento) o `✗5` |
+| Resultados | Una fila por competidora y bloque anotado: intentos, zona, top, puntos, si suma al total (americana), quién anotó y cuándo |
+| Competidores | Dorsal, nombre y categoría |
+| Apelaciones | Si hay: fecha, etapa, tipo, estado, competidora, bloque, argumento, quién la presentó y quién la resolvió |
+
+La fila de títulos queda fija, y en las hojas de etapa también las columnas de posición y nombre. Lo pueden descargar el organizador y el admin de la plataforma.
 
 1. Agregar etapas (qualis, semifinal, final) con su formato y, si corresponde, la etapa previa.
    - **World Climbing:** bloques (por ejemplo W1–W4, M1–M4) y duración del turno.

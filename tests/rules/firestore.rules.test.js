@@ -231,6 +231,13 @@ describe('apelaciones', () => {
     await denegado(getDocs(col(anonimo())));
   });
 
+  it('el organizador lee todas las apelaciones de su competencia (para exportarlas)', async () => {
+    await setDoc(doc(sinReglas(), `competencias/${C}/miembros/org@club.cl`), { rol: 'organizador' });
+    await permitido(addDoc(col(usuario('delegado@club.cl')), nueva('delegado@club.cl')));
+    await permitido(getDocs(col(usuario('org@club.cl'))));
+    await denegado(getDocs(col(usuario('otro@club.cl'))));
+  });
+
   it('solo el juez jefe resuelve', async () => {
     const ref = await addDoc(col(usuario('delegado@club.cl')), nueva('delegado@club.cl'));
     const resolucion = (correo) => ({ estado: 'aceptada', resueltaPor: correo, resueltaEn: serverTimestamp() });
