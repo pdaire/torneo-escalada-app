@@ -158,7 +158,7 @@ La fila de títulos queda fija, y en las hojas de etapa también las columnas de
    - **Ronda americana:** numeración **única** (B1…BN) o **por sector** (A1…A7, B1…B7), tabla de puntos (pegada como CSV o generada con la fórmula), cuántos bloques suman y, con numeración única, los sectores (`A: 1, 8, 23, 32; B: 2, 9, 16`). Por sector, los sectores salen de la tabla. La tabla y los sectores se editan después con **Tabla de puntos** y **Sectores**. No tiene orden de paso. Ver [Puntuación](puntuacion.md#ronda-americana).
 
     Marcar una como activa (una por competencia). **Renombrar** cambia el nombre que se muestra (los resultados no se tocan). **Cerrar** bloquea los resultados de la etapa. En una etapa abierta, cada categoría se puede **finalizar** por separado.
-2. Cargar competidores uno a uno o con CSV `dorsal,nombre,categoria`. Una competidora con resultados no se puede quitar.
+2. Cargar competidores uno a uno o pegando una lista `dorsal,nombre,categoria` (con coma, punto y coma o tabulación: se puede copiar desde Excel o Google Sheets). Junto al botón aparece cuántos se importaron y qué líneas se descartaron y por qué. Con el mismo dorsal y categoría se actualiza el competidor existente. Una competidora con resultados no se puede quitar.
 3. Generar el orden de paso por etapa, categoría y bloques marcados. Con una etapa previa, se puede generar con sus primeras N clasificadas, en orden inverso al ranking. Reordenarlo con Subir y Bajar.
 4. Agregar organizadores, jueces, juez jefe y delegados por correo. Asignar a cada juez uno o más bloques por etapa; en una ronda americana con sectores, se asignan sectores.
 

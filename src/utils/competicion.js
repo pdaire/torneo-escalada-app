@@ -84,3 +84,31 @@ export const rutas = {
   delegado: (c) => `/${c}/delegado`,
   admin: (c) => `/${c}/admin`,
 };
+
+// Lee competidores pegados como CSV (dorsal, nombre, categoría). Acepta coma, punto y
+// coma o tabulación (lo que llega al copiar celdas desde Excel o Google Sheets) y un
+// encabezado opcional. Devuelve también las líneas descartadas, para avisar.
+export function parsearCompetidoresCsv(texto) {
+  const competidores = [];
+  const descartadas = [];
+  const ids = new Map();
+  String(texto || '').split(/\r?\n/).forEach((original, indice) => {
+    const linea = original.trim();
+    if (!linea) return;
+    const celdas = linea.split(/[\t,;]/).map((celda) => celda.trim());
+    if (indice === 0 && /dorsal/i.test(celdas[0] || '') && /nombre/i.test(linea)) return;
+    const [dorsal, nombre, categoria] = celdas;
+    if (!dorsal || !nombre || !categoria) {
+      descartadas.push({ linea: indice + 1, texto: linea, motivo: 'faltan dorsal, nombre o categoría' });
+      return;
+    }
+    const id = `${slug(categoria)}-${dorsal}`;
+    if (ids.has(id)) {
+      descartadas.push({ linea: indice + 1, texto: linea, motivo: `dorsal ${dorsal} repetido en ${categoria} (línea ${ids.get(id)})` });
+      return;
+    }
+    ids.set(id, indice + 1);
+    competidores.push({ id, dorsal, nombre, categoria, categoriaId: slug(categoria) });
+  });
+  return { competidores, descartadas };
+}

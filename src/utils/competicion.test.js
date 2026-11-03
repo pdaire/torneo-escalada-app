@@ -23,3 +23,25 @@ describe('nombre de la competencia en la URL', () => {
     expect(rutas.competidor('copa-chile', 'general-4')).toBe('/copa-chile/competidor/general-4');
   });
 });
+
+describe('importar competidores', async () => {
+  const { parsearCompetidoresCsv } = await import('./competicion');
+
+  it('acepta coma, punto y coma y tabulación (copiado desde Excel), con encabezado', () => {
+    const { competidores, descartadas } = parsearCompetidoresCsv('dorsal\tnombre\tcategoria\n60\tTor-kjetil Johansen\tExperto Varones\r\n44;Florencia Encina;Experto Damas\n61,Håkon-Aleksander,Novicio Varones\n');
+    expect(descartadas).toEqual([]);
+    expect(competidores).toEqual([
+      { id: 'experto-varones-60', dorsal: '60', nombre: 'Tor-kjetil Johansen', categoria: 'Experto Varones', categoriaId: 'experto-varones' },
+      { id: 'experto-damas-44', dorsal: '44', nombre: 'Florencia Encina', categoria: 'Experto Damas', categoriaId: 'experto-damas' },
+      { id: 'novicio-varones-61', dorsal: '61', nombre: 'Håkon-Aleksander', categoria: 'Novicio Varones', categoriaId: 'novicio-varones' },
+    ]);
+  });
+
+  it('informa las líneas incompletas y los dorsales repetidos en una categoría', () => {
+    const { competidores, descartadas } = parsearCompetidoresCsv('1,Ana,General\n2,Bea\n1,Otra,General\n1,Carla,Damas');
+    expect(competidores.map((c) => c.id)).toEqual(['general-1', 'damas-1']);
+    expect(descartadas.map((d) => d.linea)).toEqual([2, 3]);
+    expect(descartadas[1].motivo).toMatch(/repetido/);
+  });
+
+});

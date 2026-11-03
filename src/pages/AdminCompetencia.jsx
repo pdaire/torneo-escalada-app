@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { arrayRemove, arrayUnion, deleteDoc, doc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, deleteDoc, doc, getDocs, limit, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { useEsAdmin, useMiembro, useUsuario } from '../hooks/useSesion';
 import { resultadosColRef } from '../utils/resultado';
@@ -23,6 +23,7 @@ import {
   competenciaRef,
   competidoresCol,
   docsConId,
+  parsearCompetidoresCsv,
   etapasCol,
   miembroRef,
   miembrosCol,
@@ -298,22 +299,37 @@ export default function AdminCompetencia() {
     });
   };
 
-  const importarCsv = (texto) => ejecutar(async () => {
-    const batch = writeBatch(db);
-    texto.split('\n').map((linea) => linea.trim()).filter(Boolean).forEach((linea) => {
-      if (/dorsal/i.test(linea) && /nombre/i.test(linea)) return;
-      const [dorsal, nombre, categoria] = linea.split(/[,;]/).map((item) => item.trim());
-      if (!dorsal || !nombre || !categoria) return;
-      const id = `${slug(categoria)}-${dorsal}`;
-      batch.set(doc(competidoresCol(db, competenciaId), id), {
-        dorsal,
-        nombre,
-        categoria,
-        categoriaId: slug(categoria),
-      });
-    });
-    await batch.commit();
-  });
+  // Devuelve un mensaje para mostrar junto al botón. Con el mismo dorsal y categoría
+  // se sobrescribe el competidor existente (sirve para corregir nombres).
+  const importarCsv = async (texto) => {
+    const { competidores: nuevos, descartadas } = parsearCompetidoresCsv(texto);
+    if (!nuevos.length) {
+      return { error: descartadas.length
+        ? `No se importó nada: ninguna línea tiene dorsal, nombre y categoría. Revisa la línea ${descartadas[0].linea}: "${descartadas[0].texto}".`
+        : 'Pega al menos una línea: dorsal, nombre, categoría.' };
+    }
+    try {
+      for (let inicio = 0; inicio < nuevos.length; inicio += 400) {
+        const batch = writeBatch(db);
+        nuevos.slice(inicio, inicio + 400).forEach(({ id, ...competidor }) => {
+          batch.set(doc(competidoresCol(db, competenciaId), id), competidor);
+        });
+        await batch.commit();
+      }
+    } catch (err) {
+      return { error: err.code === 'permission-denied'
+        ? 'Firestore rechazó la importación: tu cuenta no administra esta competencia o las reglas publicadas no están al día.'
+        : `No se pudo importar (${err.code || err.message}).` };
+    }
+    const existentes = new Set(competidores.map((item) => item.id));
+    const actualizados = nuevos.filter((item) => existentes.has(item.id)).length;
+    return {
+      ok: `${nuevos.length} ${nuevos.length === 1 ? 'competidor importado' : 'competidores importados'}${actualizados
+        ? ` (${actualizados} ${actualizados === 1 ? 'ya existía y se actualizó' : 'ya existían y se actualizaron'})`
+        : ''}.`,
+      descartadas,
+    };
+  };
 
   // Una competidora con resultados no se borra: dejaría resultados huérfanos
   // y cambiaría el ranking. Sin resultados, se borran también sus turnos.
@@ -831,15 +847,40 @@ function EditorTabla({ etapa, onGuardar, onCerrar }) {
 
 function CsvImport({ onImportar }) {
   const [texto, setTexto] = useState('');
+  const [importando, setImportando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const importar = async () => {
+    setImportando(true);
+    setResultado(null);
+    const respuesta = await onImportar(texto);
+    setResultado(respuesta);
+    if (respuesta.ok && !respuesta.descartadas?.length) setTexto('');
+    setImportando(false);
+  };
   return (
     <div className="admin-stack">
       <textarea
         value={texto}
-        onChange={(evento) => setTexto(evento.target.value)}
+        onChange={(evento) => { setTexto(evento.target.value); setResultado(null); }}
         placeholder={'dorsal,nombre,categoria\n9,Gabriela Sandoval,Absoluta Damas'}
         rows={4}
       />
-      <button onClick={() => onImportar(texto)} className="admin-btn-secondary" style={{ alignSelf: 'flex-start' }}>Importar CSV</button>
+      <p className="admin-meta">
+        Una línea por competidor: dorsal, nombre y categoría, separados por coma, punto y coma o tabulación (se puede copiar desde Excel o Google Sheets).
+      </p>
+      <button onClick={importar} disabled={importando || !texto.trim()} className="admin-btn-secondary" style={{ alignSelf: 'flex-start' }}>
+        {importando ? 'Importando…' : 'Importar CSV'}
+      </button>
+      {resultado?.ok && <p className="admin-estado-ok">✓ {resultado.ok}</p>}
+      {resultado?.error && <p className="admin-error">{resultado.error}</p>}
+      {resultado?.descartadas?.length > 0 && (
+        <div className="admin-error">
+          {resultado.descartadas.length} {resultado.descartadas.length === 1 ? 'línea no se importó' : 'líneas no se importaron'}:
+          <ul>
+            {resultado.descartadas.map((item) => <li key={item.linea}>Línea {item.linea}: {item.motivo} — <code>{item.texto}</code></li>)}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
