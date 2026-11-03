@@ -131,6 +131,7 @@ Solo para el super admin: una cuenta que está en `admins` y entra con **Google*
 
   Se crea oculta de la portada. Después aparece una tarjeta con las direcciones para copiar (admin del club, jueces, delegados, tablero), **Copiar mensaje para el organizador** (un texto con sus direcciones y los primeros pasos, para WhatsApp o correo), **Abrir su admin** y **Publicar en la portada**.
 - **Competencias:** una tarjeta por competencia con su estado (**En portada**, **Oculta** o **Pasada**), fecha, club, lugar y dirección, y los enlaces a su admin y su tablero. Pueden estar varias publicadas a la vez.
+- **Simular resultados:** para probar una competencia. Elige la competencia y el avance de la ronda (10 % a 100 %) y escribe intentos aleatorios en su etapa activa: los mejores encadenan más y los bloques difíciles cuestan más (en ronda americana, la dificultad sale de la tabla de puntos; en World Climbing se sigue el orden de paso). **Dejar en cero** limpia los resultados de la etapa activa. Ambos reemplazan lo anotado y piden escribir la dirección de la competencia para confirmar. Escribe como juez jefe: si tu cuenta no es miembro de la competencia, se agrega solo durante la simulación. No funciona con la etapa cerrada o con categorías finalizadas. **No usarlo en una competencia real.**
 - **Demos** (ver abajo). En desarrollo (`npm run dev`) también se puede cargar el ejemplo Baguales 2026.
 
 ## Administración de una competencia `/:competencia/admin`

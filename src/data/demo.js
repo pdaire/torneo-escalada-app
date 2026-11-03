@@ -121,7 +121,7 @@ export function acotar(valor, minimo, maximo) {
 }
 
 // Simula un bloque intento por intento. `maxIntentos` es lo que alcanzó a probar en su turno.
-function simularBloque(azar, nivel, dificultad, maxIntentos) {
+export function simularBloque(azar, nivel, dificultad, maxIntentos) {
   const pZona = acotar(0.25 + nivel - (dificultad * 0.6), 0.05, 0.9);
   const pTop = acotar(nivel - dificultad + 0.05, 0.02, 0.75);
   let zonaEnIntento = null;

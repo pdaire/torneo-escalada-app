@@ -110,6 +110,34 @@ describe('competencia demo', () => {
     await denegado(guardarResultado(juez, clave('B3'), { intentos: 1, zonaEnIntento: 1, topEnIntento: 1, version: 1 }, 'top', 'pdaire+juez1@gmail.com'));
   });
 
+  it('simular resultados: el admin escribe como juez jefe temporal y después puede dejar en cero', async () => {
+    const { plantilla } = await import('../../src/data/plantillas');
+    const { simularEtapa } = await import('../../src/data/simulacion');
+    const { escribirResultados } = await import('../../src/data/escribirResultados');
+    const c = 'liga-prueba';
+    const [{ id, ...etapa }] = plantilla('americana').etapas();
+    const competidores = Array.from({ length: 12 }, (_, i) => ({ id: `general-${i + 1}`, dorsal: String(i + 1), nombre: `C ${i + 1}`, categoria: 'General', categoriaId: 'general' }));
+    const owner = sinReglas();
+    await setDoc(doc(owner, `competencias/${c}`), { nombre: 'Liga', activa: false });
+    await setDoc(doc(owner, `competencias/${c}/etapas/${id}`), etapa);
+    for (const { id: cid, ...competidor } of competidores) await setDoc(doc(owner, `competencias/${c}/competidores/${cid}`), competidor);
+
+    const admin = usuarioGoogle(ADMIN);
+    // Sin ser juez, el admin no anota.
+    const resultados = simularEtapa({ etapa: { id, ...etapa }, competidores, avance: 0.6, semilla: 11 });
+    await denegado(escribirResultados(admin, c, resultados, ADMIN, { etapaId: id }));
+    // Como juez jefe temporal, sí.
+    await setDoc(doc(admin, `competencias/${c}/miembros/${ADMIN}`), { rol: 'juez_jefe', nombre: 'Simulación', club: '', asignaciones: {} });
+    await permitido(escribirResultados(admin, c, resultados, ADMIN, { etapaId: id }));
+    const escritos = await getDocs(query(collection(anonimo(), 'resultados'), where('competenciaId', '==', c)));
+    expect(escritos.docs.filter((d) => d.data().intentos > 0)).toHaveLength(resultados.length);
+    // Dejar en cero.
+    await permitido(escribirResultados(admin, c, [], ADMIN, { etapaId: id }));
+    const enCero = await getDocs(query(collection(anonimo(), 'resultados'), where('competenciaId', '==', c)));
+    expect(enCero.docs.every((d) => d.data().intentos === 0 && d.data().topEnIntento === null)).toBe(true);
+    await permitido(deleteDoc(doc(admin, `competencias/${c}/miembros/${ADMIN}`)));
+  });
+
   it('alguien que no es admin no puede cargarla', async () => {
     await denegado(cargarDemo(usuario('pdaire+juez1@gmail.com'), 'pdaire+juez1@gmail.com'));
   });

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
-import { doc, onSnapshot, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { cargarDemo } from '../data/cargarDemo';
 import { DEMO_DELEGADO, DEMO_JUEZ, demoPrincipal } from '../data/demo';
 import { demoPrimavera } from '../data/demoPrimavera';
+import { escribirResultados } from '../data/escribirResultados';
+import { simularEtapa } from '../data/simulacion';
 import { PLANTILLAS, mensajeParaOrganizador, plantilla } from '../data/plantillas';
 import { BOULDERS, COMPETIDORES } from '../data/ordenAbsolutaDamas';
 import { useEsAdmin, useUsuario } from '../hooks/useSesion';
@@ -67,6 +69,8 @@ export default function AdminGlobal() {
   // Fecha local de hoy (AAAA-MM-DD), para marcar las competencias que ya pasaron.
   const [hoy] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [progresoDemo, setProgresoDemo] = useState('');
+  const [simulacion, setSimulacion] = useState({ competenciaId: '', avance: 60 });
+  const [progresoSimulacion, setProgresoSimulacion] = useState('');
 
   useEffect(() => {
     document.body.classList.add('admin-mode');
@@ -168,6 +172,49 @@ export default function AdminGlobal() {
     await updateDoc(competenciaRef(db, competencia.id), { activa: !competencia.activa });
     if (creada?.id === competencia.id) setCreada((actual) => ({ ...actual, activa: !competencia.activa }));
   });
+
+  // Escribe resultados aleatorios (o en cero) en la etapa activa de una competencia, para
+  // probarla. Escribe como juez jefe: si tu cuenta no es miembro, se agrega solo mientras
+  // dura la simulación. Pide escribir la dirección para no usarlo por error.
+  const simularResultados = (avance) => {
+    const c = simulacion.competenciaId;
+    if (!c) return;
+    const accion = avance > 0 ? `escribir resultados ALEATORIOS (${avance} % de la ronda)` : 'dejar EN CERO todos los resultados';
+    const confirmacion = window.prompt(`Vas a ${accion} en la etapa activa de /${c}. Lo anotado ahí se reemplaza. Escribe ${c} para confirmar.`);
+    if (confirmacion == null) return;
+    if (confirmacion.trim() !== c) {
+      setError('La dirección no coincide: no se hizo nada.');
+      return;
+    }
+    setProgresoSimulacion('Leyendo la competencia…');
+    let agregado = false;
+    ejecutar(async () => {
+      const [etapas, competidores, turnos] = await Promise.all(
+        [etapasCol(db, c), competidoresCol(db, c), turnosCol(db, c)].map((col) => getDocs(col).then(docsConId)),
+      );
+      const etapa = etapas.find((item) => item.activa);
+      if (!etapa) throw new Error(`/${c} no tiene una etapa activa.`);
+      if (etapa.estado === 'cerrada') throw new Error(`La etapa ${etapa.nombre} está cerrada: reábrela para simular.`);
+      if (etapa.categoriasCerradas?.length) throw new Error(`${etapa.nombre} tiene categorías finalizadas: reábrelas para simular.`);
+      if (!competidores.length) throw new Error(`/${c} no tiene competidores.`);
+
+      const miembro = await getDoc(miembroRef(db, c, correo));
+      if (!miembro.exists()) {
+        await setDoc(miembroRef(db, c, correo), { rol: 'juez_jefe', nombre: 'Simulación', club: '', asignaciones: {} });
+        agregado = true;
+      } else if (miembro.data().rol !== 'juez_jefe') {
+        throw new Error(`Tu correo tiene el rol ${miembro.data().rol} en /${c}. Para simular tiene que ser juez jefe (o no ser miembro).`);
+      }
+      const resultados = avance > 0 ? simularEtapa({ etapa, competidores, turnos, avance: avance / 100 }) : [];
+      const escritos = await escribirResultados(db, c, resultados, correo, { etapaId: etapa.id, onProgreso: setProgresoSimulacion });
+      setMensaje(avance > 0
+        ? `/${c}: ${resultados.length} resultados aleatorios en ${etapa.nombre}.`
+        : `/${c}: ${escritos} resultados de ${etapa.nombre} quedaron en cero.`);
+    }).finally(async () => {
+      if (agregado) await deleteDoc(miembroRef(db, c, correo)).catch(() => {});
+      setProgresoSimulacion('');
+    });
+  };
 
   const cargarCompetenciaDemo = (crear) => {
     const demo = crear();
@@ -400,6 +447,33 @@ export default function AdminGlobal() {
             </div>
           );
         })}
+      </section>
+
+      <section className="admin-section">
+        <h2>Simular resultados</h2>
+        <p className="admin-meta">
+          Para probar una competencia: escribe intentos aleatorios en su <strong>etapa activa</strong> (los mejores encadenan más y
+          los bloques difíciles cuestan más). Reemplaza lo anotado en esa etapa. <strong>No lo uses en una competencia real.</strong>
+        </p>
+        <div className="admin-row">
+          <select value={simulacion.competenciaId} onChange={(evento) => setSimulacion((actual) => ({ ...actual, competenciaId: evento.target.value }))}>
+            <option value="">Competencia</option>
+            {competencias.map((item) => <option key={item.id} value={item.id}>{item.nombre} (/{item.id})</option>)}
+          </select>
+          <label>
+            Avance de la ronda: <strong>{simulacion.avance} %</strong>
+            <input type="range" min="10" max="100" step="10" value={simulacion.avance}
+              onChange={(evento) => setSimulacion((actual) => ({ ...actual, avance: Number(evento.target.value) }))} />
+          </label>
+        </div>
+        <div className="admin-row">
+          {progresoSimulacion ? <button disabled className="admin-btn">{progresoSimulacion}</button> : (
+            <>
+              <button onClick={() => simularResultados(simulacion.avance)} disabled={!simulacion.competenciaId} className="admin-btn">Simular resultados</button>
+              <button onClick={() => simularResultados(0)} disabled={!simulacion.competenciaId} className="admin-btn-secondary">Dejar en cero</button>
+            </>
+          )}
+        </div>
       </section>
 
       <section className="admin-section">
