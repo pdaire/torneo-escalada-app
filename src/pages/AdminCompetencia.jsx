@@ -254,6 +254,13 @@ export default function AdminCompetencia() {
     await batch.commit();
   });
 
+  // El id de la etapa no cambia (los resultados lo usan); solo el nombre que se muestra.
+  const renombrarEtapa = (etapa) => {
+    const nombre = window.prompt('Nuevo nombre de la etapa', etapa.nombre);
+    if (nombre == null || !nombre.trim() || nombre.trim() === etapa.nombre) return;
+    ejecutar(() => updateDoc(doc(etapasCol(db, competenciaId), etapa.id), { nombre: nombre.trim() }));
+  };
+
   const cambiarEstadoEtapa = (etapa) => {
     const cerrar = etapa.estado !== 'cerrada';
     const pregunta = cerrar
@@ -629,6 +636,7 @@ export default function AdminCompetencia() {
                 <button onClick={() => cambiarEstadoEtapa(item)} className="admin-btn-secondary">
                   {item.estado === 'cerrada' ? 'Reabrir' : 'Cerrar'}
                 </button>
+                <button onClick={() => renombrarEtapa(item)} className="admin-btn-secondary">Renombrar</button>
                 {esAmericana(item) && item.numeracion !== 'sector' && <button onClick={() => editarSectores(item)} className="admin-btn-secondary">Sectores</button>}
                 {esAmericana(item) && (
                   <button onClick={() => setTablaAbierta((abierta) => (abierta === item.id ? null : item.id))} className="admin-btn-secondary">
